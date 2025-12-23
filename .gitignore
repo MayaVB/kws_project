@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Trained models
+*.pt
+*.keras
+
+# OS / Editor
+.vscode/
+.DS_Store
+
+# Requirements
+.txt
+*.txt
