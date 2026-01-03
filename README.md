@@ -29,11 +29,14 @@ Performance is compared across different noise levels (SNR values) to assess the
 
 ### Data Preparation
 **Speech Dataset**
+
 The project uses the Google Speech Commands v2 dataset:
 https://www.kaggle.com/datasets/sylkaladin/speech-commands-v2
+
 Download the dataset and place it in the appropriate data directory as defined in the project scripts.
 
 **Noise Data**
+
 Background noise samples are added to clean speech signals to simulate noisy environments at different SNR levels.
 
 ### Installation and Environment Setup
@@ -41,13 +44,19 @@ Prerequisites
 1. Python 3.9 - 3.11
 2. Git
 3. (Optional) GPU with CUDA support for faster training
+
 **Step 1 - Clone the repository**
+
 https://github.com/MayaVB/kws_project.git
+
 **Step 2 - Create and activate a virtual environment**
+
 python -m venv .venv
 source .venv/bin/activate        # Linux/Mac
 .venv\Scripts\activate           # Windows
+
 **Step 3 - Install dependencies**
+
 pip install -r requirements.txt
 
 ### References
@@ -56,6 +65,9 @@ https://arxiv.org/abs/1711.07128
 
 ### Authors
 Ido Ben David
+
 Avital Skop
+
 Supervised by Maya Veisman 
+
 Academic Supervisor: Prof. Sharon Gannot
