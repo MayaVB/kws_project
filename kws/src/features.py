@@ -1,11 +1,12 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import librosa
 import librosa.display
 from tqdm import tqdm
-import multiprocessing.dummy as mp
-import os
 from sklearn.preprocessing import StandardScaler
+from multiprocessing.dummy import Pool as ThreadPool
+from functools import partial
 
 def extract_mfcc(audio_data: np.ndarray, sr: int, n_mfcc: int = 13) -> np.ndarray:
     """
@@ -17,13 +18,12 @@ def add_mfcc_column(df, sr: int = 16000, n_mfcc: int = 13, use_parallel: bool = 
     audio_list = df["audio_data"].tolist()
 
     if use_parallel:
-        tasks = [(a, sr, n_mfcc) for a in audio_list]
-        with mp.Pool(os.cpu_count()) as pool:
-            mfcc_list = list(tqdm(
-                pool.starmap(extract_mfcc, tasks),
-                total=len(tasks),
-                desc="Extracting MFCCs"
-            ))
+        with ThreadPool(os.cpu_count()) as pool:
+            fn = partial(extract_mfcc, sr=sr, n_mfcc=n_mfcc)  # extract_mfcc(audio, sr=..., n_mfcc=...)
+            mfcc_list = list(tqdm(pool.imap(fn, audio_list),
+                                  total=len(audio_list),
+                                  desc="Extracting MFCCs",
+                                  leave=True))
     else:
         mfcc_list = [
             extract_mfcc(a, sr, n_mfcc)
@@ -107,95 +107,47 @@ def plot_audio_and_features(
     else:
         mfcc_raw = librosa.feature.mfcc(y=audio_sample, sr=sampling_rate, n_mfcc=n_mfcc)
 
-    # MFCC (scaled / normalized) if exists 
-    mfcc_scaled = None
-    if scaled_mfcc_col in row and row[scaled_mfcc_col] is not None:
-        mfcc_scaled = row[scaled_mfcc_col]
-        mfcc_scaled = _to_mfcc_FxT(mfcc_scaled)  # (n_mfcc, T)
+    # MFCC (scaled / normalized) 
+    mfcc_scaled = row[scaled_mfcc_col]
+    mfcc_scaled = _to_mfcc_FxT(mfcc_scaled)  # (n_mfcc, T)
 
     # Chromagram 
     chroma = librosa.feature.chroma_stft(y=audio_sample, sr=sampling_rate)
 
     # Plot layout 
-    # If we have scaled MFCC, make 2 rows x 3 cols; otherwise 2x2 as before
-    if mfcc_scaled is None:
-        fig, axes = plt.subplots(2, 2, figsize=(13, 7))
+    fig, axes = plt.subplots(2, 2, figsize=(18, 7))
 
-        # 1) Waveform
-        librosa.display.waveshow(audio_sample, sr=sampling_rate, ax=axes[0, 0])
-        axes[0, 0].set_title("Waveform")
-        axes[0, 0].set_xlabel("Time (s)")
-        axes[0, 0].set_ylabel("Amplitude")
+    # Waveform
+    librosa.display.waveshow(audio_sample, sr=sampling_rate, ax=axes[0, 0])
+    axes[0, 0].set_title("Waveform")
+    axes[0, 0].set_xlabel("Time (s)")
+    axes[0, 0].set_ylabel("Amplitude")
 
-        # 2) Spectrogram
-        librosa.display.specshow(D, sr=sampling_rate, x_axis="time", y_axis="log", ax=axes[0, 1], cmap="viridis")
-        axes[0, 1].set_title("Spectrogram (log freq)")
-        axes[0, 1].set_xlabel("Time (s)")
-        axes[0, 1].set_ylabel("Frequency (Hz)")
+    # Spectrogram
+    librosa.display.specshow(D, sr=sampling_rate, x_axis="time", y_axis="log", ax=axes[0, 1], cmap="viridis")
+    axes[0, 1].set_title("Spectrogram (log freq)")
+    axes[0, 1].set_xlabel("Time (s)")
+    axes[0, 1].set_ylabel("Frequency (Hz)")
 
-        # 3) MFCC (raw)
-        img = librosa.display.specshow(mfcc_raw, x_axis="time", sr=sampling_rate, ax=axes[1, 0])
-        axes[1, 0].set_title("MFCC (raw)")
-        axes[1, 0].set_xlabel("Time (s)")
-        axes[1, 0].set_ylabel("MFCC index")
-        fig.colorbar(img, ax=axes[1, 0])
+    # MFCC (raw)
+    img1 = librosa.display.specshow(mfcc_raw, x_axis="time", sr=sampling_rate, ax=axes[1, 0])
+    axes[1, 0].set_title("MFCC (raw)")
+    axes[1, 0].set_xlabel("Time (s)")
+    axes[1, 0].set_ylabel("MFCC index")
+    fig.colorbar(img1, ax=axes[1, 0])
 
-        # 4) Chromagram
-        img2 = librosa.display.specshow(chroma, y_axis="chroma", x_axis="time", sr=sampling_rate, ax=axes[1, 1])
-        axes[1, 1].set_title("Chromagram")
-        axes[1, 1].set_xlabel("Time (s)")
-        axes[1, 1].set_ylabel("Pitch class")
-        fig.colorbar(img2, ax=axes[1, 1])
-
-        plt.tight_layout()
-        plt.show()
-
-    else:
-        fig, axes = plt.subplots(2, 3, figsize=(18, 7))
-
-        # 1) Waveform
-        librosa.display.waveshow(audio_sample, sr=sampling_rate, ax=axes[0, 0])
-        axes[0, 0].set_title("Waveform")
-        axes[0, 0].set_xlabel("Time (s)")
-        axes[0, 0].set_ylabel("Amplitude")
-
-        # 2) Spectrogram
-        librosa.display.specshow(D, sr=sampling_rate, x_axis="time", y_axis="log", ax=axes[0, 1], cmap="viridis")
-        axes[0, 1].set_title("Spectrogram (log freq)")
-        axes[0, 1].set_xlabel("Time (s)")
-        axes[0, 1].set_ylabel("Frequency (Hz)")
-
-        # 3) Chromagram
-        img_ch = librosa.display.specshow(chroma, y_axis="chroma", x_axis="time", sr=sampling_rate, ax=axes[0, 2])
-        axes[0, 2].set_title("Chromagram")
-        axes[0, 2].set_xlabel("Time (s)")
-        axes[0, 2].set_ylabel("Pitch class")
-        fig.colorbar(img_ch, ax=axes[0, 2])
-
-        # 4) MFCC (raw)
-        img1 = librosa.display.specshow(mfcc_raw, x_axis="time", sr=sampling_rate, ax=axes[1, 0])
-        axes[1, 0].set_title("MFCC (raw)")
-        axes[1, 0].set_xlabel("Time (s)")
-        axes[1, 0].set_ylabel("MFCC index")
-        fig.colorbar(img1, ax=axes[1, 0])
-
-        # 5) MFCC (scaled)
+    # MFCC (_scaled)
+    if mfcc_scaled is not None:
         img2 = librosa.display.specshow(mfcc_scaled, x_axis="time", sr=sampling_rate, ax=axes[1, 1])
         axes[1, 1].set_title("MFCC (scaled / normalized)")
         axes[1, 1].set_xlabel("Time (s)")
         axes[1, 1].set_ylabel("MFCC index")
         fig.colorbar(img2, ax=axes[1, 1])
+    else:
+        axes[1, 1].axis("off")
 
-        # 6) Difference (optional view)
-        diff = mfcc_scaled - mfcc_raw
-        img3 = librosa.display.specshow(diff, x_axis="time", sr=sampling_rate, ax=axes[1, 2])
-        axes[1, 2].set_title("Scaled - Raw (difference)")
-        axes[1, 2].set_xlabel("Time (s)")
-        axes[1, 2].set_ylabel("MFCC index")
-        fig.colorbar(img3, ax=axes[1, 2])
-
-        plt.tight_layout()
-        plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 def _to_mfcc_FxT(mfcc):

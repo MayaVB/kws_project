@@ -90,7 +90,7 @@ class ImprovedDSCNN(nn.Module):
 
     def forward(self, x):
         # Input: (B, 1, T, F)
-        print("in", x.shape)
+        # print("in", x.shape)
         x = F.relu(self.bn1(self.conv1(x)))
 
         x = F.relu(self.bn2(self.dw2(x)))

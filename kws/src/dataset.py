@@ -32,7 +32,7 @@ def load_audio_file(file_path: str, sampling_rate: int = 16000):
     - filename (basename)
     - label (parent folder name)
     - audio array (y)
-    - full path
+    # - full path
     """
     y, _ = librosa.load(file_path, sr=sampling_rate)
     label = os.path.basename(os.path.dirname(file_path))
@@ -62,23 +62,30 @@ def build_audio_dataframe(file_paths, sampling_rate: int = 16000, use_parallel: 
     return df
 
 
-def split_train_val_test(X, y, filenames, test_size=0.2, val_size=0.5, random_state=42):
+def split_train_val_test(X, y, filenames,
+                         train_ratio=0.8, val_ratio=0.1, test_ratio=0.1,
+                         random_state=42):
     """
-    Split into:
-      train = 1 - test_size
-      temp  = test_size
-    Then split temp into val and test with val_size (default 0.5 -> 10%/10% when test_size=0.2)
+    Split X,y,filenames into train/val/test using given ratios.
     """
+    total = train_ratio + val_ratio + test_ratio
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError(f"train/val/test ratios must sum to 1. Got {total}")
+    # split train vs temp
+    temp_ratio = val_ratio + test_ratio
     X_train, X_temp, y_train, y_temp, fn_train, fn_temp = train_test_split(
         X, y, filenames,
-        test_size=test_size,
+        test_size=temp_ratio,
         random_state=random_state,
         stratify=y
     )
 
+    # split temp into val/test
+    # val is a fraction of temp
+    val_fraction_of_temp = val_ratio / temp_ratio
     X_val, X_test, y_val, y_test, fn_val, fn_test = train_test_split(
         X_temp, y_temp, fn_temp,
-        test_size=val_size,
+        test_size=(1.0 - val_fraction_of_temp),
         random_state=random_state,
         stratify=y_temp
     )
@@ -134,21 +141,54 @@ def make_label_encoder(y_train_labels, y_val_labels, y_test_labels):
     return enc, y_train_enc, y_val_enc, y_test_enc
 
 
-def make_loaders(X_train, y_train, fn_train,
-                 X_val, y_val, fn_val,
-                 X_test, y_test, fn_test,
-                 batch_size=64):
+def make_loaders(
+    X_train, y_train, fn_train,
+    X_val, y_val, fn_val,
+    X_test, y_test, fn_test,
+    batch_size=64,
+    num_workers=0,
+    shuffle_train=True
+):
     """
     Create DataLoaders.
-    train_loader uses shuffle=True.
-    val/test use shuffle=False to keep deterministic filename order.
+
+    Parameters
+    ----------
+    batch_size : int
+        Number of samples per batch.
+    num_workers : int
+        How many subprocesses to use for data loading.
+    shuffle_train : bool
+        Whether to shuffle training data.
+    Notes
+    -----
+    Validation and test loaders are never shuffled
+    to keep filename order deterministic.
     """
     train_ds = MFCCDataset(X_train, y_train, fn_train)
     val_ds   = MFCCDataset(X_val,   y_val,   fn_val)
     test_ds  = MFCCDataset(X_test,  y_test,  fn_test)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False)
-    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=shuffle_train,
+        num_workers=num_workers
+    )
+
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers
+    )
 
     return train_loader, val_loader, test_loader
+

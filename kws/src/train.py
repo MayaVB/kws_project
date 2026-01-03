@@ -1,13 +1,30 @@
 import torch
 import torch.nn as nn
+import random
+import numpy as np
 
+def get_device(device_cfg="auto"):
+    if device_cfg == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if device_cfg == "cuda":
+        return "cuda"
+    if device_cfg == "cpu":
+        return "cpu"
+    raise ValueError(f"Unknown device option: {device_cfg}")
 
-def get_device():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
-    if device.type == "cuda":
-        return torch.cuda.get_device_name(0)
+def set_seed(seed: int):
+    """
+    Make runs more reproducible (not 100% guaranteed on GPU, but very helpful).
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
+    # Optional: stronger determinism (can slow down a bit)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def train_model(model, train_loader, val_loader,
                 num_epochs=150, patience=10,
