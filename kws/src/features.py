@@ -52,7 +52,8 @@ def apply_scaler(mfcc_list, scaler):
     scaled = []
     for m in mfcc_list:
         scaled.append(scaler.transform(m).astype(np.float32))
-    return np.array(scaled, dtype=object)
+    # return np.array(scaled, dtype=object)
+    return scaled
 
 def plot_audio_and_features(
     audio_df,

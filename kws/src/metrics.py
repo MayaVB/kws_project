@@ -65,6 +65,8 @@ def confusion_and_report(model, loader, class_names, device, model_name=""):
 
     return cm, report, (np.array(all_true), np.array(all_pred), np.array(all_files))
 
+# TODO
+# add random choise of classes to misclassified
 
 def find_misclassified_files(all_true, all_pred, all_files,
                              class_names,

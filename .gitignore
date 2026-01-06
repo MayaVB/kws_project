@@ -10,6 +10,7 @@ env/
 .ipynb_checkpoints/
 
 # Trained models
+runs/
 *.pt
 *.keras
 

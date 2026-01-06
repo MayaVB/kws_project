@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import random
 import numpy as np
+from pathlib import Path
 
 def get_device(device_cfg="auto"):
     if device_cfg == "auto":
@@ -30,11 +31,16 @@ def train_model(model, train_loader, val_loader,
                 num_epochs=150, patience=10,
                 lr=1e-3, weight_decay=1e-3,
                 model_name="model",
-                device=None):
+                device="cpu", best_dir: str | Path = "runs/default/models",):
     """
     Train a model and save the best weights based on validation accuracy.
     train_loader/val_loader should return: (X, y, filename)
     """
+
+    best_dir = Path(best_dir)
+    best_dir.mkdir(parents=True, exist_ok=True)
+    best_path = best_dir / f"best_{model_name}.pt"
+
     if device is None:
         device = get_device()
     
@@ -48,7 +54,6 @@ def train_model(model, train_loader, val_loader,
 
     best_val_acc = 0.0
     epochs_no_improve = 0
-    best_path = f"best_{model_name}.pt"
 
     train_loss_hist, val_loss_hist = [], []
     train_acc_hist,  val_acc_hist  = [], []
@@ -138,7 +143,8 @@ def train_model(model, train_loader, val_loader,
         "train_acc":  train_acc_hist,
         "val_acc":    val_acc_hist,
         "best_path":  best_path,
-        "best_val_acc": best_val_acc
+        "best_val_acc": best_val_acc,
+        "best_path": str(best_path),
     }
     return history
 
