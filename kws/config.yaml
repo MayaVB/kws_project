@@ -1,16 +1,24 @@
 device: auto    # auto / cpu / cuda
 
 output_dir: "runs"
+run_name: "train_clean_val_clean_test_noisy" 
 
-data_sources:
-  clean_dir: "C:\\temp\\KWS\\data\\speech-commands-v2"
-  noisy_dir: "C:\\temp\\KWS\\data\\generated_noisy"
-  # denoised_dir: 
+test_mode: "noisy"               # clean / noisy / denoised
 
-folders:
-  clean:    [0, 6]
-  noisy:    [0, 6]
-  # denoised: [0, 6]
+# clean data
+clean_dir: "C:\\temp\\KWS\\data\\speech-commands-v2"
+folder_start: 0
+folder_end: 6
+
+# background noises
+bg_noise_dir: "C:\\temp\\KWS\\data\\speech-commands-v2\\_background_noise_"
+
+# noise parameters
+noise_ops: ["pink_noise", "doing_the_dishes", "white_noise", "running_tap", "exercise_bike", "dude_miaowing", "all"]
+snr_choices: [-20, -10, 0, 10, 20]
+random_noise_start: true          # random crop location inside noise file
+noise_if_short: "loop"            # loop / repeat / pad_zeros
+noisy_test_seed: 123              # for reproducibility
 
 sampling_rate: 16000
 
@@ -38,11 +46,10 @@ make_confusion: true
 show_plots: true
 
 mis_enabled: true
-mis_true_label: "bed"
-mis_pred_label: "bird"
+mis_random_pair: true
+mis_seed: 123
 mis_max_rows: 50
 
-val_source: clean               # clean / noisy / denoised
-test_sources: [clean, noisy]    # clean / noisy / denoised
-
-run_name: "trainClean_valClean" # trainClean_valClean / trainClean_valNoisy
+# confusion matrix controls
+cm_single: true       
+cm_compare: true       

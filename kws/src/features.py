@@ -19,7 +19,7 @@ def add_mfcc_column(df, sr: int = 16000, n_mfcc: int = 13, use_parallel: bool = 
 
     if use_parallel:
         with ThreadPool(os.cpu_count()) as pool:
-            fn = partial(extract_mfcc, sr=sr, n_mfcc=n_mfcc)  # extract_mfcc(audio, sr=..., n_mfcc=...)
+            fn = partial(extract_mfcc, sr=sr, n_mfcc=n_mfcc)  
             mfcc_list = list(tqdm(pool.imap(fn, audio_list),
                                   total=len(audio_list),
                                   desc="Extracting MFCCs",

@@ -58,6 +58,10 @@ def train_model(model, train_loader, val_loader,
     train_loss_hist, val_loss_hist = [], []
     train_acc_hist,  val_acc_hist  = [], []
 
+    print("Train batches:", len(train_loader), "Val batches:", len(val_loader))
+    xb, yb, fn = next(iter(train_loader))
+    print("One train batch shapes:", xb.shape, yb.shape, "example fn:", fn[0])
+
      # Main training loop over epochs 
     for epoch in range(1, num_epochs + 1):
         # --- Train ---
