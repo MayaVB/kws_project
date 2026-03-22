@@ -60,7 +60,7 @@ def train_model(model, train_loader, val_loader,
 
     print("Train batches:", len(train_loader), "Val batches:", len(val_loader))
     xb, yb, fn = next(iter(train_loader))
-    print("One train batch shapes:", xb.shape, yb.shape, "example fn:", fn[0])
+    # print("One train batch shapes:", xb.shape, yb.shape, "example fn:", fn[0])
 
      # Main training loop over epochs 
     for epoch in range(1, num_epochs + 1):
@@ -162,17 +162,34 @@ def load_model(model_class, num_classes, best_path, device=None):
     return model
 
 
-def evaluate_loader(model, loader, device=None):
-    """Return (loss, acc) on a DataLoader. loader returns (X, y, filename)."""
+def evaluate_loader(model, loader, device=None, return_meta=False):
+    """
+    Return (loss, acc).
+    If return_meta=True also return:
+    true labels, predicted labels, filenames, snr, noise
+    """
+
     if device is None:
         device = get_device()
+
     criterion = nn.CrossEntropyLoss()
 
     model.eval()
     total, correct, running_loss = 0, 0, 0.0
 
+    all_true = []
+    all_pred = []
+    all_files = []
+    all_snr = []
+    all_noise = []
+
     with torch.no_grad():
-        for X_batch, y_batch, _fn_batch in loader:
+        for batch in loader:
+
+            X_batch = batch[0]
+            y_batch = batch[1]
+            filenames = batch[2]
+
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
 
@@ -181,7 +198,30 @@ def evaluate_loader(model, loader, device=None):
 
             running_loss += loss.item() * X_batch.size(0)
             preds = outputs.argmax(dim=1)
+
             total += y_batch.size(0)
             correct += (preds == y_batch).sum().item()
 
-    return running_loss / total, correct / total
+            if return_meta:
+                all_true.extend(y_batch.cpu().numpy())
+                all_pred.extend(preds.cpu().numpy())
+                all_files.extend(filenames)
+
+                # אם dataset מחזיר גם snr ורעש
+                if len(batch) >= 6:
+                    snr_db = batch[4]
+                    noise_name = batch[5]
+
+                    if torch.is_tensor(snr_db):
+                        snr_db = snr_db.cpu().numpy()
+
+                    all_snr.extend(snr_db)
+                    all_noise.extend(noise_name)
+
+    loss = running_loss / total
+    acc = correct / total
+
+    if return_meta:
+        return loss, acc, all_true, all_pred, all_files, all_snr, all_noise
+
+    return loss, acc

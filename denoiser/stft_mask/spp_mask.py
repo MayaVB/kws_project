@@ -1,4 +1,3 @@
-# vad.py
 import numpy as np
 
 def compute_time_freq_spp(stft, threshold=0.5, low_freq_emphasis=True):
@@ -16,13 +15,13 @@ def compute_time_freq_spp(stft, threshold=0.5, low_freq_emphasis=True):
     if low_freq_emphasis:
         F = energy.shape[0]
         bin_idx = np.arange(F)
-        low_freq_weight = np.exp(-bin_idx / 50.0)[:, None, None]  # (F,1,1)
+        low_freq_weight = np.exp(-bin_idx / 50.0)[:, None]  # (F,1)
         energy = energy * low_freq_weight
 
     # Mean energy per frequency bin
-    mean_energy = np.mean(energy, axis=1)  # (F,)
+    mean_energy = np.mean(energy, axis=1, keepdims=True)  # (F,1)
 
     # Time-frequency VAD mask
-    vad_mask = energy > (threshold * mean_energy[:, None])
+    vad_mask = energy > (threshold * mean_energy)
 
-    return vad_mask
+    return vad_mask.astype(np.float32)

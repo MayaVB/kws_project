@@ -6,6 +6,8 @@ import torch
 from torch.utils.data import Dataset
 from typing import List, Sequence, Dict
 import random
+from denoiser.stft_mask.denoise import denoise_signal
+from denoiser.stft_mask.unet_model import UNetDenoiser
 
 def _rms(x: np.ndarray, eps: float = 1e-12) -> float:
     return float(np.sqrt(np.mean(x**2) + eps))
@@ -82,7 +84,10 @@ class NoisyTestDataset(Dataset):
         noise_if_short: str = "loop",
         seed: int = 123,
         mode: str = "noisy",   # "noisy" / "denoised" 
-        return_audio: bool = True
+        return_audio: bool = True,
+        device: str = "cpu",
+        use_unet: bool = False,
+        unet_model = None,
     ):
         self.audio = list(audio_list)
         self.labels = list(labels_list)
@@ -112,6 +117,9 @@ class NoisyTestDataset(Dataset):
         self.y_enc = self.enc.transform(np.array(self.labels))
 
         self.return_audio = bool(return_audio)
+        self.device = device
+        self.use_unet = bool(use_unet)
+        self.unet_model = unet_model
 
     def _build_noise_bank(self):
         # load all wav files in bg_noise_dir
@@ -148,6 +156,8 @@ class NoisyTestDataset(Dataset):
         return len(self.audio)
 
     def __getitem__(self, idx: int):
+        snr_db = None
+        noise_name = None
         # make per-sample reproducible randomness (so reruns give same noisy test)
         np.random.seed(self.seed + idx)
         random.seed(self.seed + idx)
@@ -174,7 +184,25 @@ class NoisyTestDataset(Dataset):
             )
 
             if self.mode == "denoised":
-                pass
+                sig = denoise_signal(
+                noisy_signal=sig,
+                fs=self.sr,
+                n_fft=1024,
+                hop=256,
+                win="hamming",
+                threshold=0.5,
+                device=self.device,
+                use_unet=self.use_unet,
+                unet_model=self.unet_model,
+            )
+
+            # fix signal length
+            target_len = self.sr   # 16000
+            sig = librosa.util.fix_length(sig, size=self.sr)   
+            sig = sig.astype(np.float32)   
+
+            if len(sig) != len(clean):
+                print("problem file:", fname, "len sig:", len(sig), "len clean:", len(clean))
 
         # MFCC 
         mfcc = librosa.feature.mfcc(y=sig, sr=self.sr, n_mfcc=self.n_mfcc).T  # (T, F)
@@ -193,5 +221,5 @@ class NoisyTestDataset(Dataset):
 
         if self.return_audio:
                 sig_tensor = torch.from_numpy(sig.astype(np.float32))
-                return X_tensor, y_tensor, fname, sig_tensor
+                return X_tensor, y_tensor, fname, sig_tensor, snr_db, noise_name
         return X_tensor, y_tensor, fname

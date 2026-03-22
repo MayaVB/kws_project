@@ -34,10 +34,25 @@ def load_audio_file(file_path: str, sampling_rate: int = 16000):
     - audio array (y)
     # - full path
     """
-    y, _ = librosa.load(file_path, sr=sampling_rate)
+    audio, sr = librosa.load(file_path, sr=sampling_rate)
+    audio = fix_audio_length(audio, sampling_rate)  # ensure 1 second length
     label = os.path.basename(os.path.dirname(file_path))
     filename = os.path.basename(file_path)
-    return filename, label, y
+    return filename, label, audio
+
+def fix_audio_length(audio, target_len=16000):
+    """
+    Ensure audio has length exactly target_len (e.g. 1 second at 16kHz).
+    If too long, truncate. If too short, pad with zeros at the end.
+    """
+    if len(audio) > target_len:
+        audio = audio[:target_len]
+
+    elif len(audio) < target_len:
+        pad = target_len - len(audio)
+        audio = np.pad(audio, (0, pad))
+
+    return audio
 
 def build_audio_dataframe(file_paths, sampling_rate: int = 16000, use_parallel: bool = True):
     """

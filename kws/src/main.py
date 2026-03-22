@@ -1,4 +1,9 @@
 from __future__ import annotations
+
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+import torch
 from datetime import datetime
 import numpy as np
 from pathlib import Path
@@ -7,17 +12,21 @@ from config import load_config
 from torch.utils.data import DataLoader
 from noise_dataset import NoisyTestDataset
 from sklearn.model_selection import train_test_split
-from models import BasicDSCNN, ImprovedDSCNN
+from models import DSCNN
 from train import get_device, train_model, load_model, evaluate_loader
+from denoiser.stft_mask.unet_model import UNetDenoiser
 from metrics import (
     plot_history, 
     confusion_and_report, 
-    find_misclassified_files, 
     plot_two_confusion_matrices,
     pick_random_class_pair,
     misclassified_between_two_classes,
     plot_one_from_clean_df_row,
-    plot_one_noisy_item
+    plot_one_noisy_item,
+    plot_accuracy_vs_snr,
+    plot_accuracy_per_noise,
+    plot_confusion_per_snr,
+    plot_confusion_per_noise,
 )
 
 from dataset import (
@@ -43,8 +52,7 @@ def run(cfg: dict):
     print("Using device:", device)
 
     run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_tag = str(cfg.get("run_name", "run"))  
-    run_id = f"{run_stamp}_{run_tag}"
+    run_id = f"{run_stamp}"
 
     run_dir = Path(cfg["output_dir"]) / run_id
     models_dir = run_dir / "models"
@@ -54,10 +62,30 @@ def run(cfg: dict):
     print("Run dir:", run_dir)
     print("Models dir:", models_dir)
 
+    # UNet model directory (shared between runs)
+    unet_dir = Path(cfg["output_dir"]) / "unet_denoiser"
+    unet_dir.mkdir(parents=True, exist_ok=True)
+    # path for the best UNet model
+    unet_best_path = unet_dir / "best_model.pth"
+    print("UNet dir:", unet_dir)
+    print("UNet best model path:", unet_best_path)
+
     sampling_rate = int(cfg["sampling_rate"])
     n_mfcc = int(cfg["n_mfcc"])
     use_parallel = bool(cfg["use_parallel"])
     random_state = int(cfg["random_state"])
+
+    train_mode = str(cfg.get("train_mode", "clean")).lower()
+    val_mode = str(cfg.get("val_mode", "clean")).lower()
+    test_mode = str(cfg.get("test_mode", "clean")).lower()
+
+    print("\n=== DATA MODES ===")
+    print(f"Train mode: {train_mode}")
+    print(f"Val mode  : {val_mode}")
+    print(f"Test mode : {test_mode}")
+    print("\n=== MODEL PATHS ===")
+    print("DSCNN best model will be saved in:", models_dir)
+    print("UNet best model:", unet_best_path)
 
     # Load CLEAN audio df
     clean_root = str(cfg["clean_dir"])
@@ -66,7 +94,7 @@ def run(cfg: dict):
 
     all_folders = list_folders(clean_root)
     selected_folders = all_folders[folder_start:folder_end]
-    print("CLEAN selected folders:", selected_folders)
+    print("\nCLEAN selected folders:", selected_folders)
 
     clean_paths = collect_wav_paths(clean_root, selected_folders)
     print("CLEAN total wav files:", len(clean_paths))
@@ -128,7 +156,7 @@ def run(cfg: dict):
         use_parallel=use_parallel
     )
     print("\nCLEAN after MFCC computed for ALL:")
-    print(tabulate(clean_df.head(1), headers="keys", tablefmt="psql", showindex=False))
+    # print(tabulate(clean_df.head(1), headers="keys", tablefmt="psql", showindex=False))
 
     df_train = clean_df.iloc[idx_train].reset_index(drop=True)
     df_val = clean_df.iloc[idx_val].reset_index(drop=True)
@@ -187,21 +215,32 @@ def run(cfg: dict):
         shuffle_train=bool(cfg["shuffle_train"])
     )
 
-    val_loader = val_loader_clean  # fixed clean validation
-    print("\nVAL source: CLEAN (fixed)")
     print("Loader batches:",
-          f"train={len(train_loader)}, val={len(val_loader)}, test_clean={len(test_loader_clean)}")
+              f"train={len(train_loader)}, val={len(val_loader_clean)}, test_clean={len(test_loader_clean)}")
 
-    test_mode = str(cfg.get("test_mode", "clean")).lower()
+    if val_mode == "clean":
+        val_loader = val_loader_clean  # fixed clean validation
+    else:
+        pass
+    
     if test_mode == "clean":
         test_loader = test_loader_clean
-        print("TEST mode: CLEAN (precomputed MFCC, padded)")
-
+        
     else:
         # Build on-the-fly noisy test from CLEAN TEST AUDIO of THE SAME SPLIT
         test_audio_list = df_test_audio["audio_data"].values
         test_label_list = df_test_audio["label"].values
         test_filename_list = df_test_audio["filename"].values
+
+        unet_model = None
+        use_unet = bool(cfg.get("use_unet_denoiser", False))
+        if use_unet:
+            print("Loading UNet denoiser...")
+            unet_model = UNetDenoiser().to(device)
+            if os.path.exists(cfg["unet_model_path"]):
+                ckpt = torch.load(cfg["unet_model_path"], map_location=device)
+                unet_model.load_state_dict(ckpt)
+            unet_model.eval()
 
         # Dataset for EVAL/TEST
         noisy_ds = NoisyTestDataset(
@@ -220,9 +259,12 @@ def run(cfg: dict):
             noise_if_short=str(cfg.get("noise_if_short", "loop")),
             seed=int(cfg.get("noisy_test_seed", 123)),
             mode=test_mode,
-            return_audio=False,   
+            return_audio=True,   
+            device=device,
+            use_unet = use_unet,
+            unet_model = unet_model if use_unet else None,
         )
-
+        
         test_loader = DataLoader(
             noisy_ds,
             batch_size=int(cfg["batch_size"]),
@@ -230,198 +272,128 @@ def run(cfg: dict):
             num_workers=int(cfg["num_workers"]),
         )
 
-        print(f"TEST mode: {test_mode.upper()} (on-the-fly). size={len(noisy_ds)}, batches={len(test_loader)}")
+        print(f"TEST mode: {test_mode} (on-the-fly). size={len(noisy_ds)}, batches={len(test_loader)}")
 
         # show examples (TRAIN clean + TEST noisy)
         if bool(cfg["show_plots"]):
             # TRAIN clean example (from df_train) 
-            row_train = df_train.iloc[0]
+            row_train = df_train.iloc[2]
             plot_one_from_clean_df_row(
                 row=row_train,
                 scaler=scaler,
                 sampling_rate=sampling_rate,
                 n_mfcc=n_mfcc,
-                title_prefix="TRAIN CLEAN example"
-            )
-
-            # Dataset for PLOT ONLY: returns (X, y, fname, sig)
-            noisy_ds_plot = NoisyTestDataset(
-                audio_list=test_audio_list,
-                labels_list=test_label_list,
-                filenames_list=test_filename_list,
-                label_encoder=label_encoder,
-                scaler=scaler,
-                sampling_rate=sampling_rate,
-                n_mfcc=n_mfcc,
-                max_len=max_len,
-                bg_noise_dir=str(cfg["bg_noise_dir"]),
-                noise_ops=list(cfg["noise_ops"]),
-                snr_choices=list(cfg["snr_choices"]),
-                random_noise_start=bool(cfg.get("random_noise_start", True)),
-                noise_if_short=str(cfg.get("noise_if_short", "loop")),
-                seed=int(cfg.get("noisy_test_seed", 123)),
-                mode=test_mode,
-                return_audio=True,   # IMPORTANT (plot only)
+                title_prefix=f"TRAIN {train_mode} example"
             )
 
             plot_one_noisy_item(
-                noisy_ds=noisy_ds_plot,
-                idx=0,
+                noisy_ds=noisy_ds,
+                idx=1,
                 sampling_rate=sampling_rate,
                 n_mfcc=n_mfcc,
-                title_prefix=f"TEST {test_mode.upper()} example"
+                title_prefix=f"TEST {test_mode} example"
             )
 
 
     # Train + Eval
-    if bool(cfg["train_basic"]):
-        print("\n=== TRAIN BasicDSCNN ===")
-        basic = BasicDSCNN(num_classes)
-        hist_basic = train_model(
-            basic, train_loader, val_loader,
-            num_epochs=int(cfg["epochs"]),
-            patience=int(cfg["patience"]),
-            lr=float(cfg["lr"]),
-            weight_decay=float(cfg["weight_decay"]),
-            model_name="basic_dscnn",
-            device=device,
-            best_dir=models_dir
+    print("\n=== TRAIN DSCNN Model ===")
+    model = DSCNN(num_classes)
+    hist = train_model(
+        model, train_loader, val_loader,
+        num_epochs=int(cfg["epochs"]),
+        patience=int(cfg["patience"]),
+        lr=float(cfg["lr"]),
+        weight_decay=float(cfg["weight_decay"]),
+        model_name="dscnn",
+        device=device,
+        best_dir=models_dir
+    )
+
+    best_model = load_model(DSCNN, num_classes, hist["best_path"], device=device)
+
+    tr_loss, tr_acc = evaluate_loader(best_model, train_loader, device=device)
+    va_loss, va_acc = evaluate_loader(best_model, val_loader, device=device)
+
+    if test_mode != "clean":
+        te_loss, te_acc, t_test, p_test, f_test, snr_test, noise_test = evaluate_loader(
+        best_model, test_loader, device=device, return_meta=True)
+    else:
+        te_loss, te_acc = evaluate_loader(best_model, test_loader, device=device)
+    
+    print(f"\ntrain: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
+    print(f"val: loss={va_loss:.4f}, acc={va_acc:.4f}")
+    print(f"test: loss={te_loss:.4f}, acc={te_acc:.4f}")
+
+    if bool(cfg["show_plots"]):
+        plot_history(hist)
+
+        if test_mode != "clean":
+            print(f"\n=== NOISE ANALYSIS (mode={test_mode}) ===")
+            plot_accuracy_vs_snr(t_test, p_test, snr_test)
+            # plot_accuracy_per_noise(t_test, p_test, noise_test)
+            plot_confusion_per_snr(t_test, p_test, snr_test, class_names)
+            plot_confusion_per_noise(t_test, p_test, noise_test, class_names)
+
+    cm_single  = bool(cfg.get("cm_single", True))
+    cm_compare = bool(cfg.get("cm_compare", False))
+
+    cm_val = cm_test = None
+    t_val = p_val = f_val = None
+    t_test = p_test = f_test = None
+
+    if bool(cfg["make_confusion"]):
+        cm_val, rep_val, (t_val, p_val, f_val) = confusion_and_report(
+            best_model, val_loader, class_names, device,
+            model_name=f"VAL {val_mode}" if cm_single else ""
         )
 
-        if bool(cfg["show_plots"]):
-            plot_history(hist_basic, title_prefix="BasicDSCNN")
-
-        best_basic = load_model(BasicDSCNN, num_classes, hist_basic["best_path"], device=device)
-
-        tr_loss, tr_acc = evaluate_loader(best_basic, train_loader, device=device)
-        va_loss, va_acc = evaluate_loader(best_basic, val_loader, device=device)
-        te_loss, te_acc = evaluate_loader(best_basic, test_loader, device=device)
-
-        print(f"[BasicDSCNN] train: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
-        print(f"[BasicDSCNN]   val: loss={va_loss:.4f}, acc={va_acc:.4f}")
-        print(f"[BasicDSCNN]  test: loss={te_loss:.4f}, acc={te_acc:.4f}")
-
-        cm_single  = bool(cfg.get("cm_single", True))
-        cm_compare = bool(cfg.get("cm_compare", False))
-
-        cm_val = cm_test = None
-        t_val = p_val = f_val = None
-        t_test = p_test = f_test = None
-
-        if bool(cfg["make_confusion"]):
-            cm_val, rep_val, (t_val, p_val, f_val) = confusion_and_report(
-                best_basic, val_loader, class_names, device,
-                model_name="BasicDSCNN (VAL CLEAN)" if cm_single else ""
-            )
-
-            cm_test, rep_test, (t_test, p_test, f_test) = confusion_and_report(
-                best_basic, test_loader, class_names, device,
-                model_name=f"BasicDSCNN (TEST {test_mode.upper()})" if cm_single else ""
-            )
-
-            if cm_compare:
-                plot_two_confusion_matrices(
-                    cm_left=cm_val,
-                    cm_right=cm_test,
-                    class_names=class_names,
-                    title_left="VAL (Clean)",
-                    title_right=f"TEST ({test_mode.upper()})",
-                    suptitle="BasicDSCNN - VAL vs TEST"
-                )
-
-        # Misclassified list (based on VAL by default)
-        if bool(cfg["mis_enabled"]):
-            true_label = str(cfg.get("mis_true_label", "learn"))
-            pred_label = str(cfg.get("mis_pred_label", "house"))
-            if (true_label in class_names) and (pred_label in class_names):
-                mis_df = find_misclassified_files(
-                    t_test, p_test, f_test,
-                    class_names,
-                    true_label_name=true_label,
-                    pred_label_name=pred_label
-                )
-                print("\nBasicDSCNN - Misclassified files (TEST):")
-                print(tabulate(mis_df.head(int(cfg.get("mis_max_rows", 50))),
-                                headers="keys", tablefmt="psql", showindex=False))
-
-    if bool(cfg["train_improved"]):
-        print("\n=== TRAIN ImprovedDSCNN ===")
-        improved = ImprovedDSCNN(num_classes)
-        hist_improved = train_model(
-            improved, train_loader, val_loader,
-            num_epochs=int(cfg["epochs"]),
-            patience=int(cfg["patience"]),
-            lr=float(cfg["lr"]),
-            weight_decay=float(cfg["weight_decay"]),
-            model_name="improved_dscnn",
-            device=device,
-            best_dir=models_dir
+        cm_test, rep_test, (t_test, p_test, f_test) = confusion_and_report(
+            best_model, test_loader, class_names, device,
+            model_name=f"TEST {test_mode}" if cm_single else ""
         )
 
-        best_improved = load_model(ImprovedDSCNN, num_classes, hist_improved["best_path"], device=device)
-
-        tr_loss, tr_acc = evaluate_loader(best_improved, train_loader, device=device)
-        va_loss, va_acc = evaluate_loader(best_improved, val_loader, device=device)
-        te_loss, te_acc = evaluate_loader(best_improved, test_loader, device=device)
-
-        print(f"[ImprovedDSCNN] train: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
-        print(f"[ImprovedDSCNN]   val: loss={va_loss:.4f}, acc={va_acc:.4f}")
-        print(f"[ImprovedDSCNN]  test: loss={te_loss:.4f}, acc={te_acc:.4f}")
-
-        if bool(cfg["show_plots"]):
-            plot_history(hist_improved, title_prefix="ImprovedDSCNN")
-
-        cm_single  = bool(cfg.get("cm_single", True))
-        cm_compare = bool(cfg.get("cm_compare", False))
-
-        cm_val = cm_test = None
-        t_val = p_val = f_val = None
-        t_test = p_test = f_test = None
-
-        if bool(cfg["make_confusion"]):
-            cm_val, rep_val, (t_val, p_val, f_val) = confusion_and_report(
-                best_improved, val_loader, class_names, device,
-                model_name="ImprovedDSCNN (VAL CLEAN)" if cm_single else ""
-            )
-
-            cm_test, rep_test, (t_test, p_test, f_test) = confusion_and_report(
-                best_improved, test_loader, class_names, device,
-                model_name=f"ImprovedDSCNN (TEST {test_mode.upper()})" if cm_single else ""
-            )
-
-            if cm_compare:
-                plot_two_confusion_matrices(
-                    cm_left=cm_val,
-                    cm_right=cm_test,
-                    class_names=class_names,
-                    title_left="VAL (Clean)",
-                    title_right=f"TEST ({test_mode.upper()})",
-                    suptitle="ImprovedDSCNN - VAL vs TEST"
-                )
-
-
-        # Misclassified list (based on VAL by default)
-        if bool(cfg.get("mis_enabled", False)):
-            if bool(cfg.get("mis_random_pair", True)):
-                a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
-                print(f"\nRandom class pair for misclassified: A='{a}' vs B='{b}'")
-            else:
-                a = str(cfg["mis_true_label"])
-                b = str(cfg["mis_pred_label"])
-
-            mis_df = misclassified_between_two_classes(
-                t=t_test, p=p_test, f=f_test,
+        if cm_compare:
+            plot_two_confusion_matrices(
+                cm_left=cm_val,
+                cm_right=cm_test,
                 class_names=class_names,
-                class_a=a, class_b=b,
-                max_rows=int(cfg.get("mis_max_rows", 20))
+                title_left=f"VAL {val_mode}",
+                title_right=f"TEST {test_mode}",
+                suptitle="Confusion Matrices - VAL vs TEST"
             )
 
-            if len(mis_df) == 0:
-                print("No misclassifications found between these two classes.")
-            else:
-                print("\nMisclassified files between the pair:")
-                print(tabulate(mis_df, headers="keys", tablefmt="psql", showindex=True))
-                
+    # Misclassified list (based on VAL by default)
+    if bool(cfg.get("mis_enabled", False)):
+        if bool(cfg.get("mis_random_pair", True)):
+            a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
+            print(f"\nRandom class pair for misclassified: A='{a}' vs B='{b}'")
+        else:
+            a = str(cfg["mis_true_label"])
+            b = str(cfg["mis_pred_label"])
+
+        test_mode = str(cfg.get("test_mode", "clean")).strip().lower()
+
+        mis_df = misclassified_between_two_classes(
+            t=t_test,
+            p=p_test,
+            f=f_test,
+            class_names=class_names,
+            class_a=a,
+            class_b=b,
+            snr=snr_test if test_mode != "clean" else None,
+            noise=noise_test if test_mode != "clean" else None,
+            max_rows=int(cfg.get("mis_max_rows", 20)),
+        )
+
+        if len(mis_df) == 0:
+            print("No misclassifications found between these two classes.")
+        else:
+            print("\nMisclassified files between the pair:")
+            print(tabulate(mis_df, headers="keys", tablefmt="psql", showindex=True))
+            print("\nErrors by SNR:")
+            print(mis_df.groupby("snr_db").size())
+            print("\nErrors by noise:")
+            print(mis_df.groupby("noise").size())
 
 
 if __name__ == "__main__":

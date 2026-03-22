@@ -63,6 +63,7 @@ def plot_audio_and_features(
     mfcc_col: str = "mfcc",
     scaled_mfcc_col: str = "scaled_mfcc",
     random_example: bool = False,
+    title_extra: str = "",
 ):
     """
     Plot waveform, log spectrogram, MFCC, and chromagram for a single example.
@@ -85,6 +86,8 @@ def plot_audio_and_features(
         Column name for scaled MFCC features stored as (T, n_mfcc) or (n_mfcc, T).
     random_example : bool
         If True, pick a random example from the label. Otherwise pick the first.
+    title_extra : str
+        Additional string to append to the plot title for context.
     """
     # Select one sample
     df_label = audio_df[audio_df["label"] == label_name]
@@ -146,6 +149,9 @@ def plot_audio_and_features(
         fig.colorbar(img2, ax=axes[1, 1])
     else:
         axes[1, 1].axis("off")
+
+    if title_extra != "":
+        fig.suptitle(title_extra, fontsize=14)
 
     plt.tight_layout()
     plt.show()

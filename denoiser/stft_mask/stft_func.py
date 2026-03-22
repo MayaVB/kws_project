@@ -1,4 +1,3 @@
-# audio_stft.py
 import numpy as np
 import soundfile as sf
 from scipy.signal import stft, istft
@@ -87,5 +86,9 @@ def reconstruct_from_stft(
     )
 
     return x_rec
-#wav_path = r"C:\Users\idobe\python Ido\project\Data\archive\bed\00f0204f_nohash_0.wav"
 
+def apply_mask(Z_noisy_complex, mask):
+    """Element-wise mask on complex STFT."""
+    F = min(Z_noisy_complex.shape[0], mask.shape[0])
+    T = min(Z_noisy_complex.shape[1], mask.shape[1])
+    return Z_noisy_complex[:F, :T] * mask[:F, :T]

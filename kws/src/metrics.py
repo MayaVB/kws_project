@@ -5,11 +5,10 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 import torch
 import random
-
 from features import plot_audio_and_features
 
 
-def plot_history(history, title_prefix=""):
+def plot_history(history):
     epochs_range = range(1, len(history["train_loss"]) + 1)
 
     plt.figure(figsize=(12, 5))
@@ -19,7 +18,7 @@ def plot_history(history, title_prefix=""):
     plt.plot(epochs_range, history["val_loss"],   "r*-", label="Validation Loss")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
-    plt.title(f"{title_prefix} Training and Validation Loss")
+    plt.title(f"Training and Validation Loss")
     plt.legend()
 
     plt.subplot(1, 2, 2)
@@ -27,7 +26,7 @@ def plot_history(history, title_prefix=""):
     plt.plot(epochs_range, history["val_acc"],   "r*-", label="Validation Accuracy")
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy")
-    plt.title(f"{title_prefix} Training and Validation Accuracy")
+    plt.title(f"Training and Validation Accuracy")
     plt.legend()
 
     plt.tight_layout()
@@ -43,7 +42,11 @@ def confusion_and_report(model, loader, class_names, device, model_name=""):
     all_true, all_pred, all_files = [], [], []
 
     with torch.no_grad():
-        for X_batch, y_batch, fn_batch in loader:
+        for batch in loader:
+            X_batch = batch[0]
+            y_batch = batch[1]
+            fn_batch = batch[2]
+            
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
             preds = outputs.argmax(dim=1)
@@ -120,9 +123,9 @@ def pick_random_class_pair(class_names, seed=123):
     a, b = rng.sample(list(class_names), 2)
     return a, b
 
-def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, max_rows=20):
+def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, snr=None, noise=None, max_rows=20):
     """
-    Show misclassifications A->B and B->A only.
+    Show misclassifications A->B.
     t,p are integer class indices, f filenames.
     """
     name_to_idx = {name: i for i, name in enumerate(class_names)}
@@ -132,15 +135,32 @@ def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, ma
     t = np.asarray(t)
     p = np.asarray(p)
     f = np.asarray(f)
+    if snr is not None:
+        snr = np.array(snr)
+    if noise is not None:
+        noise = np.array(noise)
 
     mask_ab = (t == ia) & (p == ib)   # A predicted as B
-    mask_ba = (t == ib) & (p == ia)   # B predicted as A
 
     rows = []
-    for fn in f[mask_ab][:max_rows]:
-        rows.append({"true": class_a, "pred": class_b, "filename": fn})
-    for fn in f[mask_ba][:max_rows]:
-        rows.append({"true": class_b, "pred": class_a, "filename": fn})
+
+    idx_ab = np.where(mask_ab)[0][:max_rows]
+
+    for i in idx_ab:
+
+        row = {
+            "true": class_a,
+            "pred": class_b,
+            "filename": f[i],
+        }
+
+        if snr is not None:
+            row["snr_db"] = snr[i]
+
+        if noise is not None:
+            row["noise"] = noise[i]
+
+        rows.append(row)
 
     return pd.DataFrame(rows)
 
@@ -166,9 +186,7 @@ def find_misclassified_files(all_true, all_pred, all_files,
     return df
 
 
-# -----------------------------
 # Helpers: single consistent split by indices
-# -----------------------------
 def make_split_indices(labels: np.ndarray,
                        train_ratio: float,
                        val_ratio: float,
@@ -219,18 +237,19 @@ def plot_one_from_clean_df_row(row, scaler, sampling_rate, n_mfcc, title_prefix=
     plot_df = row.to_frame().T.copy()  # single-row DF
     plot_df["scaled_mfcc"] = [mfcc_scaled]
 
-    print(f"\nPLOT {title_prefix}: label={row['label']} filename={row['filename']} mfcc_raw={mfcc_raw.shape}")
-    plot_audio_and_features(
-        audio_df=plot_df,
-        label_name=str(row["label"]),
-        sampling_rate=sampling_rate,
-        n_mfcc=n_mfcc,
-        random_example=False
+    print(
+        f"\nPLOT {title_prefix}: label={row['label']} | filename={row['filename']} | "
+        f"mfcc={mfcc_raw.shape}"
     )
-
-
-import numpy as np
-import pandas as pd
+    
+    plot_audio_and_features(
+    audio_df=plot_df,
+    label_name=str(row["label"]),
+    sampling_rate=sampling_rate,
+    n_mfcc=n_mfcc,
+    random_example=False,
+    title_extra=f"file={row['filename']} | label={row['label']}"
+    )
 
 def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
     """
@@ -240,6 +259,7 @@ def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
     Plots waveform/spectrogram from sig if available, and scaled MFCC from X.
     """
 
+    """
     out = noisy_ds[idx]
 
     if len(out) == 4:
@@ -253,25 +273,155 @@ def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
         raise ValueError(f"Unexpected noisy_ds[idx] output length={len(out)} (expected 3 or 4).")
 
     mfcc_sc_padded = X_tensor.squeeze(0).numpy().astype(np.float32)  # (Tmax, F)
+    """
+    X_tensor, y_tensor, fname, sig_tensor, snr_db, noise_name = noisy_ds[idx]
 
-    label_for_plot = "NOISY_SAMPLE"
+    sig = sig_tensor.numpy().astype(np.float32)
+    mfcc_sc_padded = X_tensor.squeeze(0).numpy()
+
     plot_df = pd.DataFrame([{
         "filename": fname,
-        "label": label_for_plot,
-        "audio_data": sig,               # real noisy audio if exists, else zeros
-        "mfcc": None,
-        "scaled_mfcc": mfcc_sc_padded,   # already scaled+padded
+        "label": "NOISY_SAMPLE",
+        "audio_data": sig,
+        "scaled_mfcc": mfcc_sc_padded
     }])
 
     print(
-        f"\n{title_prefix} | idx={idx} | file={fname} | "
-        f"audio_len={len(sig)} | mfcc_padded={mfcc_sc_padded.shape}"
-    )
+    f"\nPLOT {title_prefix} : idx={idx} | filename={fname} | "
+    f"noise={noise_name} | SNR={snr_db} dB | "
+    f"mfcc={mfcc_sc_padded.shape}"
+)
 
     plot_audio_and_features(
-        audio_df=plot_df,
-        label_name=label_for_plot,
-        sampling_rate=sampling_rate,
-        n_mfcc=n_mfcc,
-        random_example=False
-    )
+    audio_df=plot_df,
+    label_name="NOISY_SAMPLE",
+    sampling_rate=sampling_rate,
+    n_mfcc=n_mfcc,
+    random_example=False,
+    title_extra=f"file={fname} | noise={noise_name} | SNR={snr_db} dB"
+    ) 
+
+
+def plot_accuracy_vs_snr(true_labels, pred_labels, snr_values):
+    """
+    Plot classification accuracy as a function of SNR.
+    """
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    snr_values = np.asarray(snr_values)
+
+    snr_unique = np.sort(np.unique(snr_values))
+
+    acc_per_snr = []
+    count = []
+
+    for snr in snr_unique:
+        mask = snr_values == snr
+        acc = np.mean(true_labels[mask] == pred_labels[mask])
+        acc_per_snr.append(acc)
+        count.append(np.sum(mask))
+
+    plt.figure(figsize=(7,5))
+    plt.plot(snr_unique, acc_per_snr, marker="o", linewidth=2)
+    
+    for x,y,c in zip(snr_unique, acc_per_snr, count):
+        plt.text(x, y, f"{c}", ha="center", va="bottom", fontsize=9)
+
+    plt.xlabel("SNR (dB)")
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy vs SNR")
+    plt.grid(True)
+    plt.show()   
+
+
+def plot_accuracy_per_noise(true_labels, pred_labels, noise_names):
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    noise_names = np.asarray(noise_names)
+
+    noises = np.unique(noise_names)
+    accs = []
+
+    for n in noises:
+        mask = noise_names == n
+        acc = np.mean(true_labels[mask] == pred_labels[mask])
+        accs.append(acc)
+
+    plt.figure(figsize=(8,5))
+    plt.bar(noises, accs)
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy per Noise Type")
+    plt.xticks(rotation=45, ha="right")
+    plt.ylim(0,1)
+    plt.grid(axis="y")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names):
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    snr_values = np.asarray(snr_values)
+
+    snrs = np.sort(np.unique(snr_values))
+
+    fig, axes = plt.subplots(2, 3, figsize=(12,10))
+    axes = axes.flatten()
+
+    for i,s in enumerate(snrs):
+        mask = snr_values == s
+        cm = confusion_matrix(
+            true_labels[mask],
+            pred_labels[mask],
+            labels=np.arange(len(class_names))
+        )
+
+        sns.heatmap(
+            cm,
+            ax=axes[i],
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+        axes[i].set_title(f"SNR={s} dB")
+
+    for i in range(len(snrs), len(axes)):
+        axes[i].axis("off")
+
+    fig.suptitle(f"Confusion Matrix per SNR (dB)")
+    plt.tight_layout()
+    plt.show()
+
+def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names):
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    noise_names = np.asarray(noise_names)
+    noises = np.unique(noise_names)
+    
+    fig, axes = plt.subplots(2, 3, figsize=(12,10))
+    axes = axes.flatten()
+
+    for i, n in enumerate(noises):
+        mask = noise_names == n
+        cm = confusion_matrix(
+            true_labels[mask],
+            pred_labels[mask],
+            labels=np.arange(len(class_names))
+        )
+
+        sns.heatmap(
+            cm,
+            ax=axes[i],
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+        axes[i].set_title(f"noise={n}")
+
+    fig.suptitle("Confusion Matrix per Noise Type")
+    plt.tight_layout()
+    plt.show()
