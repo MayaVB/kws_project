@@ -1,4 +1,7 @@
+import sys
 import os
+sys.path.append("/home/dsi/skopavi/Project/kws_project/sgmse_repo/sgmse")
+
 import numpy as np
 import librosa
 from sklearn.preprocessing import LabelEncoder
@@ -86,8 +89,6 @@ class NoisyTestDataset(Dataset):
         mode: str = "noisy",   # "noisy" / "denoised" 
         return_audio: bool = True,
         device: str = "cpu",
-        use_unet: bool = False,
-        unet_model = None,
     ):
         self.audio = list(audio_list)
         self.labels = list(labels_list)
@@ -118,8 +119,19 @@ class NoisyTestDataset(Dataset):
 
         self.return_audio = bool(return_audio)
         self.device = device
-        self.use_unet = bool(use_unet)
-        self.unet_model = unet_model
+
+        import pandas as pd
+
+        self.meta_dict = {}
+
+        meta_path = "/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
+
+        if os.path.exists(meta_path):
+            df = pd.read_csv(meta_path)
+            self.meta_dict = {
+                (row["label"], row["filename"]): row
+                for _, row in df.iterrows()
+            }
 
     def _build_noise_bank(self):
         # load all wav files in bg_noise_dir
@@ -169,6 +181,27 @@ class NoisyTestDataset(Dataset):
         if self.mode == "clean":
             sig = clean.astype(np.float32)
 
+        elif self.mode == "enhanced":
+            label = self.labels[idx]
+
+            enhanced_path = os.path.join(
+                "/home/dsi/skopavi/Project/kws_project/generated_enhanced",
+                label,
+                fname
+            )
+
+            sig, _ = librosa.load(enhanced_path, sr=self.sr)
+            sig = librosa.util.fix_length(sig, size=self.sr)
+            sig = sig.astype(np.float32)
+
+            key = (label, fname)
+            if key in self.meta_dict:
+                snr_db = self.meta_dict[key]["snr"]
+                noise_name = self.meta_dict[key]["noise"]
+
+            if key not in self.meta_dict:
+                print(f"Missing metadata for {fname}")
+                
         else:
             # pick noise + snr
             noise_name = self._choose_noise_name()
@@ -192,10 +225,8 @@ class NoisyTestDataset(Dataset):
                 win="hamming",
                 threshold=0.5,
                 device=self.device,
-                use_unet=self.use_unet,
-                unet_model=self.unet_model,
             )
-
+                
             # fix signal length
             target_len = self.sr   # 16000
             sig = librosa.util.fix_length(sig, size=self.sr)   

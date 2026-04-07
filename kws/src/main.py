@@ -3,28 +3,36 @@ from __future__ import annotations
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from denoiser.stft_mask.denoise import denoise_signal
 import torch
+import matplotlib
+matplotlib.use("Agg")
 from datetime import datetime
 import numpy as np
+import pandas as pd
+import librosa
 from pathlib import Path
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 from tabulate import tabulate
 from config import load_config
 from torch.utils.data import DataLoader
-from noise_dataset import NoisyTestDataset
+from noise_dataset import NoisyTestDataset, mix_with_noise_at_snr
 from sklearn.model_selection import train_test_split
 from models import DSCNN
 from train import get_device, train_model, load_model, evaluate_loader
 from denoiser.stft_mask.unet_model import UNetDenoiser
 from metrics import (
     plot_history, 
-    confusion_and_report, 
+    confusion_and_report,
+    plot_signal_comparison, 
     plot_two_confusion_matrices,
     pick_random_class_pair,
     misclassified_between_two_classes,
     plot_one_from_clean_df_row,
     plot_one_noisy_item,
     plot_accuracy_vs_snr,
-    plot_accuracy_per_noise,
     plot_confusion_per_snr,
     plot_confusion_per_noise,
 )
@@ -47,50 +55,31 @@ from features import (
 
 
 def run(cfg: dict):
-    # Device + output dirs
+    # 1. SETUP
     device = get_device(cfg["device"])
     print("Using device:", device)
 
-    run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_id = f"{run_stamp}"
+    sampling_rate = int(cfg["sampling_rate"])
+    n_mfcc = int(cfg["n_mfcc"])
 
-    run_dir = Path(cfg["output_dir"]) / run_id
+    run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = Path(cfg["output_dir"]) / f"{run_stamp}"
     models_dir = run_dir / "models"
     run_dir.mkdir(parents=True, exist_ok=True)
     models_dir.mkdir(parents=True, exist_ok=True)
-
+    plots_dir = run_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
     print("Run dir:", run_dir)
     print("Models dir:", models_dir)
+    print("Plots dir:", plots_dir)
 
-    # UNet model directory (shared between runs)
-    unet_dir = Path(cfg["output_dir"]) / "unet_denoiser"
-    unet_dir.mkdir(parents=True, exist_ok=True)
-    # path for the best UNet model
-    unet_best_path = unet_dir / "best_model.pth"
-    print("UNet dir:", unet_dir)
-    print("UNet best model path:", unet_best_path)
-
-    sampling_rate = int(cfg["sampling_rate"])
-    n_mfcc = int(cfg["n_mfcc"])
-    use_parallel = bool(cfg["use_parallel"])
-    random_state = int(cfg["random_state"])
-
-    train_mode = str(cfg.get("train_mode", "clean")).lower()
-    val_mode = str(cfg.get("val_mode", "clean")).lower()
-    test_mode = str(cfg.get("test_mode", "clean")).lower()
-
-    print("\n=== DATA MODES ===")
-    print(f"Train mode: {train_mode}")
-    print(f"Val mode  : {val_mode}")
-    print(f"Test mode : {test_mode}")
-    print("\n=== MODEL PATHS ===")
-    print("DSCNN best model will be saved in:", models_dir)
-    print("UNet best model:", unet_best_path)
-
-    # Load CLEAN audio df
+    # 2. Load CLEAN audio df
     clean_root = str(cfg["clean_dir"])
     folder_start = int(cfg["folder_start"])
     folder_end = int(cfg["folder_end"])
+
+    use_parallel = bool(cfg["use_parallel"])
+    random_state = int(cfg["random_state"])
 
     all_folders = list_folders(clean_root)
     selected_folders = all_folders[folder_start:folder_end]
@@ -148,6 +137,7 @@ def run(cfg: dict):
     print("\nSPLIT (AUDIO) sizes:",
           f"train={len(df_train_audio)}, val={len(df_val_audio)}, test={len(df_test_audio)}")
 
+    # 3. FEATURES (MFCC)
     # Compute MFCC for ALL clean df (then slice by SAME indices)
     clean_df = add_mfcc_column(
         clean_df,
@@ -156,7 +146,6 @@ def run(cfg: dict):
         use_parallel=use_parallel
     )
     print("\nCLEAN after MFCC computed for ALL:")
-    # print(tabulate(clean_df.head(1), headers="keys", tablefmt="psql", showindex=False))
 
     df_train = clean_df.iloc[idx_train].reset_index(drop=True)
     df_val = clean_df.iloc[idx_val].reset_index(drop=True)
@@ -206,7 +195,7 @@ def run(cfg: dict):
     # Build loaders
     # Train/Val ALWAYS clean
     # Test depends on cfg["test_mode"]
-    train_loader, val_loader_clean, test_loader_clean = make_loaders(
+    train_loader, val_loader, test_loader_clean = make_loaders(
         X_train_padded, y_train_enc, fn_train,
         X_val_padded, y_val_enc, fn_val,
         X_test_padded, y_test_enc, fn_test,
@@ -216,87 +205,11 @@ def run(cfg: dict):
     )
 
     print("Loader batches:",
-              f"train={len(train_loader)}, val={len(val_loader_clean)}, test_clean={len(test_loader_clean)}")
+              f"train={len(train_loader)}, val={len(val_loader)}, test_clean={len(test_loader_clean)}")
 
-    if val_mode == "clean":
-        val_loader = val_loader_clean  # fixed clean validation
-    else:
-        pass
-    
-    if test_mode == "clean":
-        test_loader = test_loader_clean
-        
-    else:
-        # Build on-the-fly noisy test from CLEAN TEST AUDIO of THE SAME SPLIT
-        test_audio_list = df_test_audio["audio_data"].values
-        test_label_list = df_test_audio["label"].values
-        test_filename_list = df_test_audio["filename"].values
+    # 4. TRAIN (CLEAN) + EVAL (CLEAN)
+    print("\n=== TRAIN CLEAN ===")
 
-        unet_model = None
-        use_unet = bool(cfg.get("use_unet_denoiser", False))
-        if use_unet:
-            print("Loading UNet denoiser...")
-            unet_model = UNetDenoiser().to(device)
-            if os.path.exists(cfg["unet_model_path"]):
-                ckpt = torch.load(cfg["unet_model_path"], map_location=device)
-                unet_model.load_state_dict(ckpt)
-            unet_model.eval()
-
-        # Dataset for EVAL/TEST
-        noisy_ds = NoisyTestDataset(
-            audio_list=test_audio_list,
-            labels_list=test_label_list,
-            filenames_list=test_filename_list,
-            label_encoder=label_encoder,
-            scaler=scaler,
-            sampling_rate=sampling_rate,
-            n_mfcc=n_mfcc,
-            max_len=max_len,
-            bg_noise_dir=str(cfg["bg_noise_dir"]),
-            noise_ops=list(cfg["noise_ops"]),
-            snr_choices=list(cfg["snr_choices"]),
-            random_noise_start=bool(cfg.get("random_noise_start", True)),
-            noise_if_short=str(cfg.get("noise_if_short", "loop")),
-            seed=int(cfg.get("noisy_test_seed", 123)),
-            mode=test_mode,
-            return_audio=True,   
-            device=device,
-            use_unet = use_unet,
-            unet_model = unet_model if use_unet else None,
-        )
-        
-        test_loader = DataLoader(
-            noisy_ds,
-            batch_size=int(cfg["batch_size"]),
-            shuffle=False,
-            num_workers=int(cfg["num_workers"]),
-        )
-
-        print(f"TEST mode: {test_mode} (on-the-fly). size={len(noisy_ds)}, batches={len(test_loader)}")
-
-        # show examples (TRAIN clean + TEST noisy)
-        if bool(cfg["show_plots"]):
-            # TRAIN clean example (from df_train) 
-            row_train = df_train.iloc[2]
-            plot_one_from_clean_df_row(
-                row=row_train,
-                scaler=scaler,
-                sampling_rate=sampling_rate,
-                n_mfcc=n_mfcc,
-                title_prefix=f"TRAIN {train_mode} example"
-            )
-
-            plot_one_noisy_item(
-                noisy_ds=noisy_ds,
-                idx=1,
-                sampling_rate=sampling_rate,
-                n_mfcc=n_mfcc,
-                title_prefix=f"TEST {test_mode} example"
-            )
-
-
-    # Train + Eval
-    print("\n=== TRAIN DSCNN Model ===")
     model = DSCNN(num_classes)
     hist = train_model(
         model, train_loader, val_loader,
@@ -309,92 +222,272 @@ def run(cfg: dict):
         best_dir=models_dir
     )
 
+    plot_history(hist, save_path=plots_dir / "training_history.png")
+
     best_model = load_model(DSCNN, num_classes, hist["best_path"], device=device)
 
     tr_loss, tr_acc = evaluate_loader(best_model, train_loader, device=device)
     va_loss, va_acc = evaluate_loader(best_model, val_loader, device=device)
 
-    if test_mode != "clean":
-        te_loss, te_acc, t_test, p_test, f_test, snr_test, noise_test = evaluate_loader(
-        best_model, test_loader, device=device, return_meta=True)
+    # 5. TEST (CLEAN)
+    test_modes_cfg = cfg.get("test_mode", "all")
+
+    if test_modes_cfg == "all":
+        test_modes = ["clean", "noisy", "denoised", "enhanced"]
+    elif isinstance(test_modes_cfg, list):
+        test_modes = [m for m in test_modes_cfg if m != "all"]
     else:
-        te_loss, te_acc = evaluate_loader(best_model, test_loader, device=device)
-    
-    print(f"\ntrain: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
-    print(f"val: loss={va_loss:.4f}, acc={va_acc:.4f}")
-    print(f"test: loss={te_loss:.4f}, acc={te_acc:.4f}")
+        test_modes = [test_modes_cfg]
 
-    if bool(cfg["show_plots"]):
-        plot_history(hist)
+    # 6. TEST - NOISY + DENOISED (ON-THE-FLY)
+    results = {}
 
-        if test_mode != "clean":
-            print(f"\n=== NOISE ANALYSIS (mode={test_mode}) ===")
-            plot_accuracy_vs_snr(t_test, p_test, snr_test)
-            # plot_accuracy_per_noise(t_test, p_test, noise_test)
-            plot_confusion_per_snr(t_test, p_test, snr_test, class_names)
-            plot_confusion_per_noise(t_test, p_test, noise_test, class_names)
+    for mode in test_modes:
+        if mode not in ["clean", "noisy", "denoised", "enhanced"]:
+             continue  # skip invalid modes
+        print(f"\n=== TEST MODE: {mode.upper()} ===")
+        if mode == "clean":
+             plot_one_from_clean_df_row(
+                row=df_test.iloc[2], scaler=scaler,
+                sampling_rate=sampling_rate, n_mfcc=n_mfcc,
+                title_prefix=f"TEST CLEAN example",
+                save_path=plots_dir / "example_clean.png")
+             loss_c, acc_c, t_c, p_c, f_c, _, _ = evaluate_loader(
+                    best_model, test_loader_clean, device=device, return_meta=True)
+                    
+             cm, rep, (t, p, f) = confusion_and_report(best_model, test_loader_clean, class_names, 
+                                                    device, model_name=f"{mode.upper()}")
+             
+             print("\n=== RESULTS (CLEAN) ===")
+             print(f"train: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
+             print(f"val: loss={va_loss:.4f}, acc={va_acc:.4f}")
+             print(f"test: loss={loss_c:.4f}, acc={acc_c:.4f}")
+             continue
+        
+        elif mode in ["noisy", "denoised", "enhanced"]:   
+            ds = NoisyTestDataset(
+                audio_list=df_test_audio["audio_data"].values,
+                labels_list=df_test_audio["label"].values,
+                filenames_list=df_test_audio["filename"].values,
+                label_encoder=label_encoder,
+                scaler=scaler,
+                sampling_rate=sampling_rate,
+                n_mfcc=n_mfcc,
+                max_len=max_len,
+                bg_noise_dir=str(cfg["bg_noise_dir"]),
+                noise_ops=list(cfg["noise_ops"]),
+                snr_choices=list(cfg["snr_choices"]),
+                seed=int(cfg.get("noisy_test_seed", 123)),
+                mode=mode,
+                device=device,)
 
-    cm_single  = bool(cfg.get("cm_single", True))
-    cm_compare = bool(cfg.get("cm_compare", False))
+            loader = DataLoader(ds, batch_size=int(cfg["batch_size"]),
+                                shuffle=False, num_workers=int(cfg["num_workers"]))
+            
+            """
+            # show example
+            if bool(cfg["show_plots"]) and mode != "clean":
+                plot_one_noisy_item(noisy_ds=ds, idx=1, sampling_rate=sampling_rate,
+                    n_mfcc=n_mfcc,title_prefix=f"TEST {mode.upper()} example")
+            """
 
-    cm_val = cm_test = None
-    t_val = p_val = f_val = None
-    t_test = p_test = f_test = None
-
-    if bool(cfg["make_confusion"]):
-        cm_val, rep_val, (t_val, p_val, f_val) = confusion_and_report(
-            best_model, val_loader, class_names, device,
-            model_name=f"VAL {val_mode}" if cm_single else ""
-        )
-
-        cm_test, rep_test, (t_test, p_test, f_test) = confusion_and_report(
-            best_model, test_loader, class_names, device,
-            model_name=f"TEST {test_mode}" if cm_single else ""
-        )
-
-        if cm_compare:
-            plot_two_confusion_matrices(
-                cm_left=cm_val,
-                cm_right=cm_test,
-                class_names=class_names,
-                title_left=f"VAL {val_mode}",
-                title_right=f"TEST {test_mode}",
-                suptitle="Confusion Matrices - VAL vs TEST"
+            loss, acc, t, p, f, snr, noise = evaluate_loader(
+                best_model, loader, device=device, return_meta=True
             )
 
-    # Misclassified list (based on VAL by default)
-    if bool(cfg.get("mis_enabled", False)):
-        if bool(cfg.get("mis_random_pair", True)):
-            a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
-            print(f"\nRandom class pair for misclassified: A='{a}' vs B='{b}'")
-        else:
-            a = str(cfg["mis_true_label"])
-            b = str(cfg["mis_pred_label"])
+            print(f"test ({mode}): loss={loss:.4f}, acc={acc:.4f}")
 
-        test_mode = str(cfg.get("test_mode", "clean")).strip().lower()
+            cm, rep, (t, p, f) = confusion_and_report(best_model, loader, class_names, 
+                                                    device, model_name=f"{mode.upper()}")
 
-        mis_df = misclassified_between_two_classes(
-            t=t_test,
-            p=p_test,
-            f=f_test,
-            class_names=class_names,
-            class_a=a,
-            class_b=b,
-            snr=snr_test if test_mode != "clean" else None,
-            noise=noise_test if test_mode != "clean" else None,
-            max_rows=int(cfg.get("mis_max_rows", 20)),
-        )
+            results[mode] = dict(loss=loss, acc=acc, t=t, p=p, f=f, snr=snr, noise=noise, cm=cm, rep=rep)
+            
+    
+    # SHOW EXAMPLES TEST ITEMS
+    idx_vis = 0
+    clean_sig = df_test_audio["audio_data"].iloc[idx_vis]
+    filename = df_test_audio["filename"].iloc[idx_vis]
+    noise_name = ds._choose_noise_name()
+    noise_arr = ds.noise_bank[noise_name][0]
+    snr_db = -10
+    noisy_sig = mix_with_noise_at_snr(clean=clean_sig, noise=noise_arr, snr_db=snr_db)
+    denoised_sig = denoise_signal(noisy_signal=noisy_sig, fs=sampling_rate, device=device)
+    # === ENHANCED SIGNAL ===
+    enhanced_path = os.path.join(
+        "/home/dsi/skopavi/Project/kws_project/generated_enhanced",
+        df_test_audio["label"].iloc[idx_vis],filename)
 
-        if len(mis_df) == 0:
+    if os.path.exists(enhanced_path):
+        enhanced_sig, _ = librosa.load(enhanced_path, sr=sampling_rate)
+    else:
+        enhanced_sig = None
+
+    plot_signal_comparison(
+        clean=clean_sig,
+        noisy=noisy_sig,
+        denoised=denoised_sig,
+        enhanced=enhanced_sig,  
+        fs=sampling_rate,
+        title=f"file={filename} | noise={noise_name} | SNR={snr_db} dB",
+        save_path=plots_dir / f"example_{filename}_snr{snr_db}.png")
+
+    # 7. CONFUSION MATRICES (3 SUBPLOTS)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+    titles = ["Clean Test", "Noisy Test", "Denoised Test", "Enhanced Test"]  
+    for i, (name, t, p) in enumerate([
+        ("Clean", t_c, p_c),
+        ("Noisy", results["noisy"]["t"], results["noisy"]["p"]),
+        ("Denoised", results["denoised"]["t"], results["denoised"]["p"]),
+        ("Enhanced", results["enhanced"]["t"], results["enhanced"]["p"]),
+    ]):
+        cm = confusion_matrix(t, p)
+        sns.heatmap(cm, ax=axes[i], annot=True, fmt="d", cmap="Blues",
+                    xticklabels=class_names, yticklabels=class_names)
+        axes[i].set_title(titles[i], fontsize=14)
+        axes[i].set_xlabel("Predicted", fontsize=12)
+        axes[i].set_ylabel("True", fontsize=12) 
+    plt.suptitle("Confusion Matrices - Clean vs Noisy vs Denoised vs Enhanced Test", fontsize=16)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    if plots_dir:
+        plt.savefig(plots_dir/ "confusion_matrices.png")
+        plt.close()
+    else:
+        plt.show()
+
+    # 8. ANALYSIS - NOISY
+    print("\n=== ANALYSIS NOISY ===")
+
+    plot_confusion_per_snr(
+        results["noisy"]["t"],
+        results["noisy"]["p"],
+        results["noisy"]["snr"],
+        class_names,
+        title = "Confusion per SNR - NOISY TEST",
+        save_path=plots_dir / "confusion_per_snr_noisy.png"
+    )
+
+    plot_confusion_per_noise(
+        results["noisy"]["t"],
+        results["noisy"]["p"],
+        results["noisy"]["noise"],
+        class_names,
+        title = "Confusion per Noise - NOISY TEST",
+        save_path=plots_dir / "confusion_per_noise_noisy.png"
+    )
+
+    # MISCLASSIFIED ANALYSIS (RANDOM PAIR)
+    a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
+    print(f"\nRandom class pair for misclassified: A='{a}' vs B='{b}'")
+
+    print("\n=== MISCLASSIFIED NOISY ===")
+    mis_noisy = misclassified_between_two_classes(
+        results["noisy"]["t"],
+        results["noisy"]["p"],
+        results["noisy"]["f"],
+        class_names,
+        a, b,
+        results["noisy"]["snr"],
+        results["noisy"]["noise"],
+        max_rows=int(cfg.get("mis_max_rows", 20)),
+    )
+    if len(mis_noisy) == 0:
             print("No misclassifications found between these two classes.")
-        else:
-            print("\nMisclassified files between the pair:")
-            print(tabulate(mis_df, headers="keys", tablefmt="psql", showindex=True))
-            print("\nErrors by SNR:")
-            print(mis_df.groupby("snr_db").size())
-            print("\nErrors by noise:")
-            print(mis_df.groupby("noise").size())
+    else:
+        print("\nMisclassified files between the pair:")
+        print(tabulate(mis_noisy, headers="keys", tablefmt="psql", showindex=True))
+        print("\nErrors by SNR:")
+        print(mis_noisy.groupby("snr_db").size())
+        print("\nErrors by noise:")
+        print(mis_noisy.groupby("noise").size())
 
+    # 9. ANALYSIS - DENOISED
+    print("\n=== ANALYSIS DENOISED ===")
+
+    plot_confusion_per_snr(
+        results["denoised"]["t"],
+        results["denoised"]["p"],
+        results["denoised"]["snr"],
+        class_names,
+        title = "Confusion per SNR - DENOISED TEST",
+        save_path=plots_dir / "confusion_per_snr_denoised.png"
+    )
+
+    plot_confusion_per_noise(
+        results["denoised"]["t"],
+        results["denoised"]["p"],
+        results["denoised"]["noise"],
+        class_names,
+        title = "Confusion per Noise - DENOISED TEST",
+        save_path=plots_dir / "confusion_per_noise_denoised.png"
+    )
+
+    # MISCLASSIFIED ANALYSIS (RANDOM PAIR)
+    print("\n=== MISCLASSIFIED DENOISED ===")
+    mis_denoised = misclassified_between_two_classes(
+        results["denoised"]["t"],
+        results["denoised"]["p"],
+        results["denoised"]["f"],
+        class_names,
+        a, b,
+        results["denoised"]["snr"],
+        results["denoised"]["noise"],
+        
+    )
+    if len(mis_denoised) == 0:
+            print("No misclassifications found between these two classes.")
+    else:
+        print("\nMisclassified files between the pair:")
+        print(tabulate(mis_denoised, headers="keys", tablefmt="psql", showindex=True))
+        print("\nErrors by SNR:")
+        print(mis_denoised.groupby("snr_db").size())
+        print("\nErrors by noise:")
+        print(mis_denoised.groupby("noise").size())
+
+    # 11. ANALYSIS - ENHANCED
+    print("\n=== ANALYSIS ENHANCED ===")
+
+    plot_confusion_per_snr(
+        results["enhanced"]["t"],
+        results["enhanced"]["p"],
+        results["enhanced"]["snr"],
+        class_names,
+        title="Confusion per SNR - ENHANCED TEST",
+        save_path=plots_dir / "confusion_per_snr_enhanced.png"
+    )
+
+    plot_confusion_per_noise(
+        results["enhanced"]["t"],
+        results["enhanced"]["p"],
+        results["enhanced"]["noise"],
+        class_names,
+        title="Confusion per Noise - ENHANCED TEST",
+        save_path=plots_dir / "confusion_per_noise_enhanced.png"
+    )
+
+    print("\n=== MISCLASSIFIED ENHANCED ===")
+
+    mis_enhanced = misclassified_between_two_classes(
+        results["enhanced"]["t"],
+        results["enhanced"]["p"],
+        results["enhanced"]["f"],
+        class_names,
+        a, b,
+        results["enhanced"]["snr"],
+        results["enhanced"]["noise"],
+    )
+
+    if len(mis_enhanced) == 0:
+        print("No misclassifications found between these two classes.")
+    else:
+        print("\nMisclassified files between the pair:")
+        print(tabulate(mis_enhanced, headers="keys", tablefmt="psql", showindex=True))
+
+        print("\nErrors by SNR:")
+        print(mis_enhanced.groupby("snr_db").size())
+
+        print("\nErrors by noise:")
+        print(mis_enhanced.groupby("noise").size())
 
 if __name__ == "__main__":
     cfg_path = Path(__file__).resolve().parents[1] / "config.yaml"

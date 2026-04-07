@@ -12,8 +12,10 @@ from torch.utils.data import Dataset, DataLoader
 
 def list_folders(main_dir: str):
     """Return directory names under main_dir."""
-    return [f for f in os.listdir(main_dir) if os.path.isdir(os.path.join(main_dir, f))]
-
+    folders = [f for f in os.listdir(main_dir) if os.path.isdir(os.path.join(main_dir, f))]
+    folders = [f for f in folders if f != "_background_noise_"]
+    folders = sorted(folders)  
+    return folders
 
 def collect_wav_paths(main_dir: str, subset_folders):
     """Collect full paths to .wav files from the selected folders."""

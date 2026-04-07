@@ -122,8 +122,8 @@ def plot_audio_and_features(
     fig, axes = plt.subplots(2, 2, figsize=(18, 7))
 
     # Waveform
-    librosa.display.waveshow(audio_sample, sr=sampling_rate, ax=axes[0, 0])
-    axes[0, 0].set_title("Waveform")
+    t = np.arange(len(audio_sample)) / float(sampling_rate)
+    axes[0, 0].plot(t, audio_sample)
     axes[0, 0].set_xlabel("Time (s)")
     axes[0, 0].set_ylabel("Amplitude")
 

@@ -3,6 +3,7 @@ import torch.nn as nn
 import random
 import numpy as np
 from pathlib import Path
+from typing import Union
 
 def get_device(device_cfg="auto"):
     if device_cfg == "auto":
@@ -31,7 +32,7 @@ def train_model(model, train_loader, val_loader,
                 num_epochs=150, patience=10,
                 lr=1e-3, weight_decay=1e-3,
                 model_name="model",
-                device="cpu", best_dir: str | Path = "runs/default/models",):
+                device="cpu", best_dir: Union[str, Path] = "runs/default/models",):
     """
     Train a model and save the best weights based on validation accuracy.
     train_loader/val_loader should return: (X, y, filename)

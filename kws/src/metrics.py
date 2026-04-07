@@ -3,12 +3,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.model_selection import train_test_split
 import torch
 import random
 from features import plot_audio_and_features
+from scipy.signal import stft
 
 
-def plot_history(history):
+
+def plot_history(history, save_path=None):
     epochs_range = range(1, len(history["train_loss"]) + 1)
 
     plt.figure(figsize=(12, 5))
@@ -30,10 +33,14 @@ def plot_history(history):
     plt.legend()
 
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
 
 
-def confusion_and_report(model, loader, class_names, device, model_name=""):
+def confusion_and_report(model, loader, class_names, device, model_name="", return_meta=False, save_path=None):
     """
     Build confusion matrix + classification report from a loader that returns (X,y,filename).
     Returns: cm, report_text, (all_true, all_pred, all_filenames)
@@ -63,7 +70,11 @@ def confusion_and_report(model, loader, class_names, device, model_name=""):
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
     plt.title(f"Confusion Matrix – {model_name}")
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
 
     report = classification_report(all_true, all_pred, target_names=class_names)
     print("Classification Report:")
@@ -77,7 +88,8 @@ def plot_two_confusion_matrices(
     class_names,
     title_left="VAL",
     title_right="TEST",
-    suptitle="Confusion Matrices Comparison"
+    suptitle="Confusion Matrices Comparison",
+    save_path=None
 ):
     """
     Plot two confusion matrices side-by-side.
@@ -112,7 +124,11 @@ def plot_two_confusion_matrices(
 
     fig.suptitle(suptitle, fontsize=14)
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
 
 
 # TODO
@@ -195,7 +211,6 @@ def make_split_indices(labels: np.ndarray,
     """
     Returns idx_train, idx_val, idx_test (numpy arrays) with stratified split.
     """
-    from sklearn.model_selection import train_test_split
 
     total = train_ratio + val_ratio + test_ratio
     if abs(total - 1.0) > 1e-6:
@@ -226,7 +241,7 @@ def subset_by_idx(arr, idx):
     return np.array(arr, dtype=object)[idx]
 
 
-def plot_one_from_clean_df_row(row, scaler, sampling_rate, n_mfcc, title_prefix=""):
+def plot_one_from_clean_df_row(row, scaler, sampling_rate, n_mfcc, title_prefix="", save_path=None):
     """
     row is a single-row DataFrame or a Series from clean_df/df_train/df_test
     Must include: audio_data, label, filename, mfcc
@@ -251,7 +266,7 @@ def plot_one_from_clean_df_row(row, scaler, sampling_rate, n_mfcc, title_prefix=
     title_extra=f"file={row['filename']} | label={row['label']}"
     )
 
-def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
+def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title):
     """
     Supports both:
       - NoisyTestDataset(return_audio=True): returns (X, y, fname, sig)
@@ -287,7 +302,7 @@ def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
     }])
 
     print(
-    f"\nPLOT {title_prefix} : idx={idx} | filename={fname} | "
+    f"\nPLOT {title} : idx={idx} | filename={fname} | "
     f"noise={noise_name} | SNR={snr_db} dB | "
     f"mfcc={mfcc_sc_padded.shape}"
 )
@@ -302,7 +317,7 @@ def plot_one_noisy_item(noisy_ds, idx, sampling_rate, n_mfcc, title_prefix=""):
     ) 
 
 
-def plot_accuracy_vs_snr(true_labels, pred_labels, snr_values):
+def plot_accuracy_vs_snr(true_labels, pred_labels, snr_values, title, save_path=None):
     """
     Plot classification accuracy as a function of SNR.
     """
@@ -331,34 +346,14 @@ def plot_accuracy_vs_snr(true_labels, pred_labels, snr_values):
     plt.ylabel("Accuracy")
     plt.title("Accuracy vs SNR")
     plt.grid(True)
-    plt.show()   
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show() 
 
 
-def plot_accuracy_per_noise(true_labels, pred_labels, noise_names):
-    true_labels = np.asarray(true_labels)
-    pred_labels = np.asarray(pred_labels)
-    noise_names = np.asarray(noise_names)
-
-    noises = np.unique(noise_names)
-    accs = []
-
-    for n in noises:
-        mask = noise_names == n
-        acc = np.mean(true_labels[mask] == pred_labels[mask])
-        accs.append(acc)
-
-    plt.figure(figsize=(8,5))
-    plt.bar(noises, accs)
-    plt.ylabel("Accuracy")
-    plt.title("Accuracy per Noise Type")
-    plt.xticks(rotation=45, ha="right")
-    plt.ylim(0,1)
-    plt.grid(axis="y")
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names):
+def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names, title, save_path=None):
     true_labels = np.asarray(true_labels)
     pred_labels = np.asarray(pred_labels)
     snr_values = np.asarray(snr_values)
@@ -390,11 +385,15 @@ def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names):
     for i in range(len(snrs), len(axes)):
         axes[i].axis("off")
 
-    fig.suptitle(f"Confusion Matrix per SNR (dB)")
+    fig.suptitle(title)
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
 
-def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names):
+def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names, title, save_path=None):
     true_labels = np.asarray(true_labels)
     pred_labels = np.asarray(pred_labels)
     noise_names = np.asarray(noise_names)
@@ -422,6 +421,53 @@ def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names)
         )
         axes[i].set_title(f"noise={n}")
 
-    fig.suptitle("Confusion Matrix per Noise Type")
+    fig.suptitle(title)
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+def _compute_spectrogram(x, fs):
+    f, t, Zxx = stft(x, fs=fs, nperseg=512, noverlap=256)
+    S = np.abs(Zxx)
+    return f, t, 20 * np.log10(S + 1e-10)
+
+
+def plot_signal_comparison(clean, noisy, denoised, enhanced=None, fs=16000, title="Signal Comparison", save_path=None):
+    """
+    Plot waveform + spectrogram for clean / noisy / denoised signals
+    """
+
+    signals = [
+        ("Clean", clean),
+        ("Noisy", noisy),
+        ("Denoised", denoised),
+        ("Enhanced", enhanced),
+    ]
+
+    fig, axes = plt.subplots(4, 2, figsize=(12, 10))
+
+    for i, (name, sig) in enumerate(signals):
+
+        # ===== waveform =====
+        axes[i, 0].plot(sig)
+        axes[i, 0].set_title(f"{name} - Waveform")
+        axes[i, 0].set_xlim([0, len(sig)])
+
+        # ===== spectrogram =====
+        f, t, S_db = _compute_spectrogram(sig, fs)
+
+        im = axes[i, 1].pcolormesh(t, f, S_db, shading='auto')
+        axes[i, 1].set_title(f"{name} - Spectrogram")
+        axes[i, 1].set_ylabel("Hz")
+        axes[i, 1].set_xlabel("Time")
+
+    fig.suptitle(title, fontsize=14)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
