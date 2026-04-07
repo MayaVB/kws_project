@@ -23,3 +23,10 @@ runs/
 # Requirements
 .txt
 *.txt
+
+kws/generated_noisy/
+generated_noisy/
+generated_enhanced/
+*.csv
+tmp_*
+tmp_sgmse_*
