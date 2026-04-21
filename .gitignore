@@ -5,6 +5,10 @@ __pycache__/
 # Virtual environments
 .venv/
 env/
+kws_env/
+kws/kws_env/
+
+# Docker
 docker_skopavi/
 docker_ido/
 
@@ -21,12 +25,27 @@ runs/
 .DS_Store
 
 # Requirements
-.txt
-*.txt
+# txt
+*.log
+avital_cheatsheet.txt
+# *.txt
 
-kws/generated_noisy/
+# Generated datasets
 generated_noisy/
 generated_enhanced/
+kws/generated_noisy/
+
+# Metadata (specific)
+generated_*metadata.csv
 *.csv
+
+# Data
+data/
+data_new/
+
+# External repos
+sgmse_repo/
+
+# Temp
 tmp_*
 tmp_sgmse_*
