@@ -34,7 +34,7 @@ meta_lookup = {
 
 
 # =====================================================
-# 🔥 WORKER
+# WORKER
 # =====================================================
 def process_chunk(args):
     folder, files = args
@@ -85,7 +85,7 @@ def process_chunk(args):
 
 
 # =====================================================
-# 🔥 MAIN
+# MAIN
 # =====================================================
 def build():
 
@@ -163,7 +163,7 @@ def build():
             chunk = remaining_files[i:i + CHUNK_SIZE]
             folder_tasks.append((folder, chunk))
 
-        # 🔥 run with progress
+        # run with progress
         processed_chunks = 0
         all_rows = []
 
@@ -189,7 +189,7 @@ def build():
         print(f"✔ Finished {folder} in {folder_time/60:.1f} min")
 
     # =====================================================
-    # 🔥 FINAL METADATA
+    # FINAL METADATA
     # =====================================================
     print("\nFinal metadata sync...")
 
@@ -205,7 +205,7 @@ def build():
             valid_rows.append(row)
 
     if len(valid_rows) == 0:
-        print("⚠️ WARNING: No files found!")
+        print("WARNING: No files found!")
 
     final_df = pd.DataFrame(valid_rows)
     final_df = final_df.drop_duplicates(subset=["label", "filename"])
