@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from visualization import plot_example_signals
+from enhanced_dataset import EnhancedTestDataset
 from denoiser.stft_mask.denoise import denoise_signal
 import torch
 import matplotlib
@@ -264,7 +266,7 @@ def run(cfg: dict):
              print(f"test: loss={loss_c:.4f}, acc={acc_c:.4f}")
              continue
         
-        elif mode in ["noisy", "denoised", "enhanced"]:   
+        elif mode in ["noisy", "denoised"]:   
             ds = NoisyTestDataset(
                 audio_list=df_test_audio["audio_data"].values,
                 labels_list=df_test_audio["label"].values,
@@ -281,56 +283,53 @@ def run(cfg: dict):
                 mode=mode,
                 device=device,)
 
-            loader = DataLoader(ds, batch_size=int(cfg["batch_size"]),
-                                shuffle=False, num_workers=int(cfg["num_workers"]))
-            
-            """
-            # show example
-            if bool(cfg["show_plots"]) and mode != "clean":
-                plot_one_noisy_item(noisy_ds=ds, idx=1, sampling_rate=sampling_rate,
-                    n_mfcc=n_mfcc,title_prefix=f"TEST {mode.upper()} example")
-            """
-
-            loss, acc, t, p, f, snr, noise = evaluate_loader(
-                best_model, loader, device=device, return_meta=True
+        elif mode == "enhanced":
+            ds = EnhancedTestDataset(
+                labels_list=df_test_audio["label"].values,
+                filenames_list=df_test_audio["filename"].values,
+                label_encoder=label_encoder,
+                scaler=scaler,
+                sampling_rate=sampling_rate,
+                n_mfcc=n_mfcc,
+                max_len=max_len,
+                enhanced_root="/home/dsi/skopavi/Project/kws_project/generated_enhanced",
+                meta_csv="/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
             )
+        
+        loader = DataLoader(ds, batch_size=int(cfg["batch_size"]),
+                            shuffle=False, num_workers=int(cfg["num_workers"]))
+        
+        """
+        # show example
+        if bool(cfg["show_plots"]) and mode != "clean":
+            plot_one_noisy_item(noisy_ds=ds, idx=1, sampling_rate=sampling_rate,
+                n_mfcc=n_mfcc,title_prefix=f"TEST {mode.upper()} example")
+        """
 
-            print(f"test ({mode}): loss={loss:.4f}, acc={acc:.4f}")
+        loss, acc, t, p, f, snr, noise = evaluate_loader(
+            best_model, loader, device=device, return_meta=True
+        )
 
-            cm, rep, (t, p, f) = confusion_and_report(best_model, loader, class_names, 
-                                                    device, model_name=f"{mode.upper()}")
+        print(f"test ({mode}): loss={loss:.4f}, acc={acc:.4f}")
 
-            results[mode] = dict(loss=loss, acc=acc, t=t, p=p, f=f, snr=snr, noise=noise, cm=cm, rep=rep)
-            
+        cm, rep, (t, p, f) = confusion_and_report(best_model, loader, class_names, 
+                                                device, model_name=f"{mode.upper()}")
+
+        results[mode] = dict(loss=loss, acc=acc, t=t, p=p, f=f, snr=snr, noise=noise, cm=cm, rep=rep)        
     
     # SHOW EXAMPLES TEST ITEMS
-    idx_vis = 0
-    clean_sig = df_test_audio["audio_data"].iloc[idx_vis]
-    filename = df_test_audio["filename"].iloc[idx_vis]
-    noise_name = ds._choose_noise_name()
-    noise_arr = ds.noise_bank[noise_name][0]
-    snr_db = -10
-    noisy_sig = mix_with_noise_at_snr(clean=clean_sig, noise=noise_arr, snr_db=snr_db)
-    denoised_sig = denoise_signal(noisy_signal=noisy_sig, fs=sampling_rate, device=device)
-    # === ENHANCED SIGNAL ===
-    enhanced_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/generated_enhanced",
-        df_test_audio["label"].iloc[idx_vis],filename)
-
-    if os.path.exists(enhanced_path):
-        enhanced_sig, _ = librosa.load(enhanced_path, sr=sampling_rate)
-    else:
-        enhanced_sig = None
-
-    plot_signal_comparison(
-        clean=clean_sig,
-        noisy=noisy_sig,
-        denoised=denoised_sig,
-        enhanced=enhanced_sig,  
-        fs=sampling_rate,
-        title=f"file={filename} | noise={noise_name} | SNR={snr_db} dB",
-        save_path=plots_dir / f"example_{filename}_snr{snr_db}.png")
-
+    plot_example_signals(
+    df_test_audio=df_test_audio,
+    label_encoder=label_encoder,
+    scaler=scaler,
+    sampling_rate=sampling_rate,
+    n_mfcc=n_mfcc,
+    max_len=max_len,
+    cfg=cfg,
+    plots_dir=plots_dir,
+    device=device,
+    idx_vis=0,
+)
     # 7. CONFUSION MATRICES (3 SUBPLOTS)
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
