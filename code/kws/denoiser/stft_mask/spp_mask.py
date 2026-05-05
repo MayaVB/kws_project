@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 def compute_time_freq_spp(stft, threshold=0.5, low_freq_emphasis=True):
     """
@@ -15,13 +16,21 @@ def compute_time_freq_spp(stft, threshold=0.5, low_freq_emphasis=True):
     if low_freq_emphasis:
         F = energy.shape[0]
         bin_idx = np.arange(F)
-        low_freq_weight = np.exp(-bin_idx / 50.0)[:, None]  # (F,1)
+        low_freq_weight = np.exp(-bin_idx / 30.0)[:, None]  # (F,1)
         energy = energy * low_freq_weight
 
     # Mean energy per frequency bin
-    mean_energy = np.mean(energy, axis=1, keepdims=True)  # (F,1)
+    # mean_energy = np.mean(energy, axis=1, keepdims=True)  # (F,1)
+    mean_energy = np.median(energy, axis=1, keepdims=True)
 
     # Time-frequency VAD mask
     vad_mask = energy > (threshold * mean_energy)
+
+    # soft mask version instead of binary mask (not used currently)
+    # ratio = energy / (mean_energy + 1e-12)
+    # mask = np.clip(ratio / threshold, 0, 1)
+
+    # Optional smoothing (e.g. Gaussian filter)
+    vad_mask = gaussian_filter(vad_mask.astype(float), sigma=1)
 
     return vad_mask.astype(np.float32)

@@ -471,3 +471,72 @@ def plot_signal_comparison(clean, noisy, denoised, enhanced=None, fs=16000, titl
         plt.close()
     else:
         plt.show()
+
+import os
+import shutil
+import subprocess
+import soundfile as sf
+
+def run_calc_metrics(df_test_audio, sampling_rate, run_dir):
+
+    TMP_ROOT = "/home/dsi/skopavi/Project/kws_project/tmp/tmp_metrics"
+
+    test_dir = os.path.join(TMP_ROOT, "test")
+    clean_dir = os.path.join(test_dir, "clean")
+    noisy_dir = os.path.join(test_dir, "noisy")
+    enhanced_tmp_dir = os.path.join(TMP_ROOT, "enhanced")
+
+    print("\n[METRICS] Reset TMP...")
+    if os.path.exists(TMP_ROOT):
+        shutil.rmtree(TMP_ROOT)
+
+    os.makedirs(clean_dir, exist_ok=True)
+    os.makedirs(noisy_dir, exist_ok=True)
+    os.makedirs(enhanced_tmp_dir, exist_ok=True)
+
+    print("[METRICS] Saving TEST files...")
+
+    noisy_root = "/home/dsi/skopavi/Project/kws_project/data/noisy/generated_noisy"
+    enhanced_root = "/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained"
+
+    for _, row in df_test_audio.iterrows():
+        fname = row["filename"]
+        label = row["label"]
+
+        # CLEAN
+        clean_path = os.path.join(clean_dir, fname)
+        sf.write(clean_path, row["audio_data"], sampling_rate)
+
+        # NOISY (copy)
+        noisy_src = os.path.join(noisy_root, label, fname)
+        noisy_dst = os.path.join(noisy_dir, fname)
+
+        if os.path.exists(noisy_src):
+            shutil.copy2(noisy_src, noisy_dst)
+
+        # ENHANCED (copy + flatten)
+        enhanced_src = os.path.join(enhanced_root, label, fname)
+        enhanced_dst = os.path.join(enhanced_tmp_dir, fname)
+
+        if os.path.exists(enhanced_src):
+            shutil.copy2(enhanced_src, enhanced_dst)
+
+    print("[METRICS] Running calc_metrics...")
+
+    metrics_out_path = run_dir / "metrics.txt"
+
+    print(clean_dir)
+    print(noisy_dir)
+    print(enhanced_tmp_dir)
+
+    cmd = f"""
+    python /home/dsi/skopavi/Project/kws_project/code/sgmse/calc_metrics.py \
+        --clean_dir {clean_dir} \
+        --noisy_dir {noisy_dir} \
+        --enhanced_dir {enhanced_tmp_dir}
+    """
+
+    with open(metrics_out_path, "w") as f:
+        subprocess.run(cmd, shell=True, stdout=f, stderr=subprocess.STDOUT)
+
+    print("[METRICS] Done! Saved to:", metrics_out_path)

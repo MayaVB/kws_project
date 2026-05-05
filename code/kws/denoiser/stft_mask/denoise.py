@@ -11,13 +11,14 @@ def denoise_signal(
     win="hamming",
     threshold=0.6,
     device="cpu",
-    use_unet=False,
-    unet_model=None,
+    # use_unet=False,
+    # unet_model=None,
 ):
     """
     noisy_signal -> denoised_signal
     """
     # UNET method 
+    """
     if use_unet:
 
         return denoise_signal_unet(
@@ -29,6 +30,7 @@ def denoise_signal(
             hop=hop,
             win=win
         )
+    """
     
     # SPP method
     f, t, Z_noisy, S_mag, _ = compute_stft_db(

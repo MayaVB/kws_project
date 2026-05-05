@@ -6,7 +6,8 @@ __pycache__/
 .venv/
 env/
 kws_env/
-kws/kws_env/
+kws_env_big/
+code/sgmse/sgmse_env/
 
 # Docker
 docker_skopavi/
@@ -15,10 +16,15 @@ docker_ido/
 # Jupyter
 .ipynb_checkpoints/
 
-# Trained models
-runs/
+# Outputs (models, runs)
+outputs/
 *.pt
 *.keras
+
+# Experiments / logs
+experiments/
+wandb/
+*.log
 
 # OS / Editor
 .vscode/
@@ -26,26 +32,25 @@ runs/
 
 # Requirements
 # txt
-*.log
-avital_cheatsheet.txt
-# *.txt
 
 # Generated datasets
-generated_noisy/
-generated_enhanced/
-kws/generated_noisy/
-
-# Metadata (specific)
-generated_*metadata.csv
+data/
 *.csv
 
-# Data
-data/
-data_new/
-
 # External repos
-sgmse_repo/
+sgmse_*
+
+# SGMSE internal junk 
+code/sgmse/checkpoints/
+code/sgmse/lightning_logs/
+code/sgmse/logs/
+code/sgmse/enhanced_*/
+code/sgmse/metrics_*/
+code/sgmse/test_data/
 
 # Temp
+tmp/
 tmp_*
-tmp_sgmse_*
+
+# Personal 
+avital_cheatsheet.txt

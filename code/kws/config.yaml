@@ -1,18 +1,18 @@
 device: auto    # auto / cpu / cuda
 
-output_dir: "runs"
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/runs"
 
 train_mode: "clean"                
 val_mode: "clean"                  
 test_mode: ["clean", "noisy", "denoised", "enhanced","all"]   
 
 # clean data
-clean_dir: "/home/dsi/skopavi/Project/kws_project/data_new"
+clean_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
 folder_start: 0
 folder_end: 4
 
 # background noises
-bg_noise_dir: "/home/dsi/skopavi/Project/kws_project/data_new/_background_noise_"
+bg_noise_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
 
 # noise parameters
 noise_ops: ["pink_noise", "doing_the_dishes", "white_noise", "running_tap", "exercise_bike", "dude_miaowing", "all"]

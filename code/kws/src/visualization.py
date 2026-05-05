@@ -4,7 +4,7 @@ import librosa
 import numpy as np
 
 from noise_dataset import NoisyTestDataset, mix_with_noise_at_snr
-from denoiser.stft_mask.denoise import denoise_signal
+from kws.denoiser.stft_mask.denoise import denoise_signal
 from metrics import plot_signal_comparison
 
 
@@ -77,7 +77,7 @@ def plot_example_signals(
     # ENHANCED (from disk)
     # =========================
     enhanced_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/generated_enhanced",
+        "/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained",
         label,
         filename
     )

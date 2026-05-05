@@ -1,3 +1,4 @@
+# build_enhanced_dataset.py
 import os
 import subprocess
 import pandas as pd
@@ -7,13 +8,17 @@ from math import ceil
 
 # ================= CONFIG ================= #
 
+BASE_DIR = "/home/dsi/skopavi/Project/kws_project"
+
 INPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/generated_noisy"
 OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/generated_enhanced"
+OUTPUT_TRAIN_ROOT = "/home/dsi/skopavi/Project/kws_project/generated_enhanced_trained"
 
 META_IN = "/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
 META_OUT = "/home/dsi/skopavi/Project/kws_project/generated_enhanced_metadata.csv"
 
 CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/sgmse_repo/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt"
+CKPT_TRAIN_PATH = "/home/dsi/skopavi/Project/kws_project/sgmse_repo/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
 
 CHUNK_SIZE = 10
 N_WORKERS = 1
@@ -23,6 +28,7 @@ TMP_ROOT = "/tmp/sgmse_chunks"
 # ========================================= #
 
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
+os.makedirs(OUTPUT_TRAIN_ROOT, exist_ok=True)
 os.makedirs(TMP_ROOT, exist_ok=True)
 
 meta_df = pd.read_csv(META_IN)
@@ -53,10 +59,10 @@ def process_chunk(args):
 
     # run model
     cmd = f"""
-    python sgmse_repo/sgmse/enhancement.py \
+    python {BASE_DIR}/sgmse_repo/sgmse/enhancement.py \
         --test_dir {tmp_in} \
         --enhanced_dir {tmp_out} \
-        --ckpt {CKPT_PATH} \
+        --ckpt {CKPT_TRAIN_PATH} \
         --device cuda
     """
     subprocess.run(cmd, shell=True)
@@ -65,7 +71,7 @@ def process_chunk(args):
 
     for f in files:
         src = os.path.join(tmp_out, f)
-        dst = os.path.join(OUTPUT_ROOT, folder, f)
+        dst = os.path.join(OUTPUT_TRAIN_ROOT, folder, f)
 
         if os.path.exists(src):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -103,7 +109,7 @@ def build():
 
     for folder in folders:
         in_dir = os.path.join(INPUT_ROOT, folder)
-        out_dir = os.path.join(OUTPUT_ROOT, folder)
+        out_dir = os.path.join(OUTPUT_TRAIN_ROOT, folder)
 
         all_files = [f for f in os.listdir(in_dir) if f.endswith(".wav")]
         done_files = []
@@ -130,7 +136,7 @@ def build():
         folder_start = time.time()
 
         in_dir = os.path.join(INPUT_ROOT, folder)
-        out_dir = os.path.join(OUTPUT_ROOT, folder)
+        out_dir = os.path.join(OUTPUT_TRAIN_ROOT, folder)
 
         os.makedirs(out_dir, exist_ok=True)
 
@@ -199,7 +205,7 @@ def build():
         label = row["label"]
         fname = row["filename"]
 
-        path = os.path.join(OUTPUT_ROOT, label, fname)
+        path = os.path.join(OUTPUT_TRAIN_ROOT, label, fname)
 
         if os.path.exists(path):
             valid_rows.append(row)

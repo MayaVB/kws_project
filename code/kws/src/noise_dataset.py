@@ -9,8 +9,8 @@ import torch
 from torch.utils.data import Dataset
 from typing import List, Sequence, Dict
 import random
-from denoiser.stft_mask.denoise import denoise_signal
-from denoiser.stft_mask.unet_model import UNetDenoiser
+from kws.denoiser.stft_mask.denoise import denoise_signal
+from kws.denoiser.stft_mask.unet_model import UNetDenoiser
 
 def _rms(x: np.ndarray, eps: float = 1e-12) -> float:
     return float(np.sqrt(np.mean(x**2) + eps))
@@ -124,7 +124,7 @@ class NoisyTestDataset(Dataset):
 
         self.meta_dict = {}
 
-        meta_path = "/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
+        meta_path = "/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
 
         if os.path.exists(meta_path):
             df = pd.read_csv(meta_path)
@@ -185,7 +185,7 @@ class NoisyTestDataset(Dataset):
             label = self.labels[idx]
 
             enhanced_path = os.path.join(
-                "/home/dsi/skopavi/Project/kws_project/generated_enhanced",
+                "/home/dsi/skopavi/Project/kws_project/data/enhanced_sgmse/generated_enhanced",
                 label,
                 fname
             )
@@ -223,7 +223,7 @@ class NoisyTestDataset(Dataset):
                 n_fft=1024,
                 hop=256,
                 win="hamming",
-                threshold=0.5,
+                threshold=0.6,
                 device=self.device,
             )
                 

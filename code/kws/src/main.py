@@ -1,3 +1,4 @@
+# main.py
 from __future__ import annotations
 
 import sys
@@ -5,7 +6,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from visualization import plot_example_signals
 from enhanced_dataset import EnhancedTestDataset
-from denoiser.stft_mask.denoise import denoise_signal
+from kws.denoiser.stft_mask.denoise import denoise_signal
 import torch
 import matplotlib
 matplotlib.use("Agg")
@@ -24,7 +25,7 @@ from noise_dataset import NoisyTestDataset, mix_with_noise_at_snr
 from sklearn.model_selection import train_test_split
 from models import DSCNN
 from train import get_device, train_model, load_model, evaluate_loader
-from denoiser.stft_mask.unet_model import UNetDenoiser
+from kws.denoiser.stft_mask.unet_model import UNetDenoiser
 from metrics import (
     plot_history, 
     confusion_and_report,
@@ -37,6 +38,7 @@ from metrics import (
     plot_accuracy_vs_snr,
     plot_confusion_per_snr,
     plot_confusion_per_noise,
+    run_calc_metrics,
 )
 
 from dataset import (
@@ -292,8 +294,8 @@ def run(cfg: dict):
                 sampling_rate=sampling_rate,
                 n_mfcc=n_mfcc,
                 max_len=max_len,
-                enhanced_root="/home/dsi/skopavi/Project/kws_project/generated_enhanced",
-                meta_csv="/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
+                enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained",
+                meta_csv="/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
             )
         
         loader = DataLoader(ds, batch_size=int(cfg["batch_size"]),
@@ -443,7 +445,7 @@ def run(cfg: dict):
         print("\nErrors by noise:")
         print(mis_denoised.groupby("noise").size())
 
-    # 11. ANALYSIS - ENHANCED
+    # 10. ANALYSIS - ENHANCED
     print("\n=== ANALYSIS ENHANCED ===")
 
     plot_confusion_per_snr(
@@ -481,12 +483,13 @@ def run(cfg: dict):
     else:
         print("\nMisclassified files between the pair:")
         print(tabulate(mis_enhanced, headers="keys", tablefmt="psql", showindex=True))
-
         print("\nErrors by SNR:")
         print(mis_enhanced.groupby("snr_db").size())
-
         print("\nErrors by noise:")
         print(mis_enhanced.groupby("noise").size())
+
+    run_calc_metrics(df_test_audio=df_test_audio,
+                      sampling_rate=sampling_rate, run_dir=run_dir)
 
 if __name__ == "__main__":
     cfg_path = Path(__file__).resolve().parents[1] / "config.yaml"
