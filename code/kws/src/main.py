@@ -237,7 +237,7 @@ def run(cfg: dict):
     test_modes_cfg = cfg.get("test_mode", "all")
 
     if test_modes_cfg == "all":
-        test_modes = ["clean", "noisy", "denoised", "enhanced"]
+        test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep10", "enhanced_trained_ep20", "all"]
     elif isinstance(test_modes_cfg, list):
         test_modes = [m for m in test_modes_cfg if m != "all"]
     else:
@@ -247,7 +247,7 @@ def run(cfg: dict):
     results = {}
 
     for mode in test_modes:
-        if mode not in ["clean", "noisy", "denoised", "enhanced"]:
+        if mode not in ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep10", "enhanced_trained_ep20"]:
              continue  # skip invalid modes
         print(f"\n=== TEST MODE: {mode.upper()} ===")
         if mode == "clean":
@@ -260,7 +260,8 @@ def run(cfg: dict):
                     best_model, test_loader_clean, device=device, return_meta=True)
                     
              cm, rep, (t, p, f) = confusion_and_report(best_model, test_loader_clean, class_names, 
-                                                    device, model_name=f"{mode.upper()}")
+                                                    device, model_name=f"{mode.upper()}",
+                                                    save_txt_path=run_dir / f"classification_reports.txt")
              
              print("\n=== RESULTS (CLEAN) ===")
              print(f"train: loss={tr_loss:.4f}, acc={tr_acc:.4f}")
@@ -285,7 +286,7 @@ def run(cfg: dict):
                 mode=mode,
                 device=device,)
 
-        elif mode == "enhanced":
+        elif mode == "enhanced_sgmse":
             ds = EnhancedTestDataset(
                 labels_list=df_test_audio["label"].values,
                 filenames_list=df_test_audio["filename"].values,
@@ -294,7 +295,32 @@ def run(cfg: dict):
                 sampling_rate=sampling_rate,
                 n_mfcc=n_mfcc,
                 max_len=max_len,
-                enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained",
+                enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/pretrained_sgmse/generated_enhanced",
+                meta_csv="/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
+            )
+        
+        elif mode == "enhanced_trained_ep10":
+            ds = EnhancedTestDataset(
+                labels_list=df_test_audio["label"].values,
+                filenames_list=df_test_audio["filename"].values,
+                label_encoder=label_encoder,
+                scaler=scaler,
+                sampling_rate=sampling_rate,
+                n_mfcc=n_mfcc,
+                max_len=max_len,
+                enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep10",
+                meta_csv="/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
+            )
+        elif mode == "enhanced_trained_ep20":
+            ds = EnhancedTestDataset(
+                labels_list=df_test_audio["label"].values,
+                filenames_list=df_test_audio["filename"].values,
+                label_encoder=label_encoder,
+                scaler=scaler,
+                sampling_rate=sampling_rate,
+                n_mfcc=n_mfcc,
+                max_len=max_len,
+                enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20",
                 meta_csv="/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
             )
         
@@ -315,7 +341,8 @@ def run(cfg: dict):
         print(f"test ({mode}): loss={loss:.4f}, acc={acc:.4f}")
 
         cm, rep, (t, p, f) = confusion_and_report(best_model, loader, class_names, 
-                                                device, model_name=f"{mode.upper()}")
+                                                device, model_name=f"{mode.upper()}",
+                                                save_txt_path=run_dir / f"classification_reports.txt")
 
         results[mode] = dict(loss=loss, acc=acc, t=t, p=p, f=f, snr=snr, noise=noise, cm=cm, rep=rep)        
     
@@ -332,15 +359,18 @@ def run(cfg: dict):
     device=device,
     idx_vis=0,
 )
-    # 7. CONFUSION MATRICES (3 SUBPLOTS)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    # 7. CONFUSION MATRICES (5 SUBPLOTS)
+    fig, axes = plt.subplots(2, 3, figsize=(14, 10))
     axes = axes.flatten()
-    titles = ["Clean Test", "Noisy Test", "Denoised Test", "Enhanced Test"]  
+    titles = ["Clean Test", "Noisy Test", "Denoised Test",
+               "Enhanced SGMSE Test", "Enhanced Trained Ep10 Test", "Enhanced Trained Ep20 Test"]  
     for i, (name, t, p) in enumerate([
         ("Clean", t_c, p_c),
         ("Noisy", results["noisy"]["t"], results["noisy"]["p"]),
         ("Denoised", results["denoised"]["t"], results["denoised"]["p"]),
-        ("Enhanced", results["enhanced"]["t"], results["enhanced"]["p"]),
+        ("Enhanced SGMSE", results["enhanced_sgmse"]["t"], results["enhanced_sgmse"]["p"]),
+        ("Enhanced Trained Ep10", results["enhanced_trained_ep10"]["t"], results["enhanced_trained_ep10"]["p"]),
+        ("Enhanced Trained Ep20", results["enhanced_trained_ep20"]["t"], results["enhanced_trained_ep20"]["p"]),
     ]):
         cm = confusion_matrix(t, p)
         sns.heatmap(cm, ax=axes[i], annot=True, fmt="d", cmap="Blues",
@@ -358,7 +388,6 @@ def run(cfg: dict):
 
     # 8. ANALYSIS - NOISY
     print("\n=== ANALYSIS NOISY ===")
-
     plot_confusion_per_snr(
         results["noisy"]["t"],
         results["noisy"]["p"],
@@ -433,7 +462,7 @@ def run(cfg: dict):
         a, b,
         results["denoised"]["snr"],
         results["denoised"]["noise"],
-        
+        max_rows=int(cfg.get("mis_max_rows", 20)),
     )
     if len(mis_denoised) == 0:
             print("No misclassifications found between these two classes.")
@@ -445,39 +474,34 @@ def run(cfg: dict):
         print("\nErrors by noise:")
         print(mis_denoised.groupby("noise").size())
 
-    # 10. ANALYSIS - ENHANCED
-    print("\n=== ANALYSIS ENHANCED ===")
-
+    # 10. ANALYSIS - ENHANCED (SGMSE + TRAINED)
+    print("\n=== ANALYSIS ENHANCED SGMSE ===")
     plot_confusion_per_snr(
-        results["enhanced"]["t"],
-        results["enhanced"]["p"],
-        results["enhanced"]["snr"],
+        results["enhanced_sgmse"]["t"],
+        results["enhanced_sgmse"]["p"],
+        results["enhanced_sgmse"]["snr"],
         class_names,
-        title="Confusion per SNR - ENHANCED TEST",
-        save_path=plots_dir / "confusion_per_snr_enhanced.png"
+        title="Confusion per SNR - ENHANCED SGMSE TEST",
+        save_path=plots_dir / "confusion_per_snr_enhanced_sgmse.png"
     )
-
     plot_confusion_per_noise(
-        results["enhanced"]["t"],
-        results["enhanced"]["p"],
-        results["enhanced"]["noise"],
+        results["enhanced_sgmse"]["t"],
+        results["enhanced_sgmse"]["p"],
+        results["enhanced_sgmse"]["noise"],
         class_names,
-        title="Confusion per Noise - ENHANCED TEST",
-        save_path=plots_dir / "confusion_per_noise_enhanced.png"
+        title="Confusion per Noise - ENHANCED SGMSE TEST",
+        save_path=plots_dir / "confusion_per_noise_enhanced_sgmse.png"
     )
-
-    print("\n=== MISCLASSIFIED ENHANCED ===")
-
+    print("\n=== MISCLASSIFIED ENHANCED SGMSE ===")
     mis_enhanced = misclassified_between_two_classes(
-        results["enhanced"]["t"],
-        results["enhanced"]["p"],
-        results["enhanced"]["f"],
+        results["enhanced_sgmse"]["t"],
+        results["enhanced_sgmse"]["p"],
+        results["enhanced_sgmse"]["f"],
         class_names,
         a, b,
-        results["enhanced"]["snr"],
-        results["enhanced"]["noise"],
+        results["enhanced_sgmse"]["snr"],
+        results["enhanced_sgmse"]["noise"],
     )
-
     if len(mis_enhanced) == 0:
         print("No misclassifications found between these two classes.")
     else:
@@ -487,9 +511,92 @@ def run(cfg: dict):
         print(mis_enhanced.groupby("snr_db").size())
         print("\nErrors by noise:")
         print(mis_enhanced.groupby("noise").size())
-
     run_calc_metrics(df_test_audio=df_test_audio,
-                      sampling_rate=sampling_rate, run_dir=run_dir)
+                      sampling_rate=sampling_rate, run_dir=run_dir,
+                      enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/pretrained_sgmse/generated_enhanced",
+                      tag="ENHANCED SGMSE (PRETRAINED)")
+
+    print("\n=== ANALYSIS ENHANCED TRAINED EP10 ===")
+    plot_confusion_per_snr(
+        results["enhanced_trained_ep10"]["t"],
+        results["enhanced_trained_ep10"]["p"],
+        results["enhanced_trained_ep10"]["snr"],
+        class_names,
+        title="Confusion per SNR - ENHANCED TRAINED TEST",
+        save_path=plots_dir / "confusion_per_snr_enhanced_trained_ep10.png"
+    )
+    plot_confusion_per_noise(
+        results["enhanced_trained_ep10"]["t"],
+        results["enhanced_trained_ep10"]["p"],
+        results["enhanced_trained_ep10"]["noise"],
+        class_names,
+        title="Confusion per Noise - ENHANCED TRAINED EP10 TEST",
+        save_path=plots_dir / "confusion_per_noise_enhanced_trained_ep10.png"
+    )
+    print("\n=== MISCLASSIFIED ENHANCED TRAINED EP10 ===")
+    mis_enhanced = misclassified_between_two_classes(
+        results["enhanced_trained_ep10"]["t"],
+        results["enhanced_trained_ep10"]["p"],
+        results["enhanced_trained_ep10"]["f"],
+        class_names,
+        a, b,
+        results["enhanced_trained_ep10"]["snr"],
+        results["enhanced_trained_ep10"]["noise"],
+    )
+    if len(mis_enhanced) == 0:
+        print("No misclassifications found between these two classes.")
+    else:
+        print("\nMisclassified files between the pair:")
+        print(tabulate(mis_enhanced, headers="keys", tablefmt="psql", showindex=True))
+        print("\nErrors by SNR:")
+        print(mis_enhanced.groupby("snr_db").size())
+        print("\nErrors by noise:")
+        print(mis_enhanced.groupby("noise").size())
+    run_calc_metrics(df_test_audio=df_test_audio,
+                      sampling_rate=sampling_rate, run_dir=run_dir,
+                      enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep10",
+                      tag="ENHANCED TRAINED EP10")
+    
+    print("\n=== ANALYSIS ENHANCED TRAINED EP20 ===")
+    plot_confusion_per_snr(
+        results["enhanced_trained_ep20"]["t"],
+        results["enhanced_trained_ep20"]["p"],
+        results["enhanced_trained_ep20"]["snr"],
+        class_names,
+        title="Confusion per SNR - ENHANCED TRAINED EP20 TEST",
+        save_path=plots_dir / "confusion_per_snr_enhanced_trained_ep20.png"
+    )
+    plot_confusion_per_noise(
+        results["enhanced_trained_ep20"]["t"],
+        results["enhanced_trained_ep20"]["p"],
+        results["enhanced_trained_ep20"]["noise"],
+        class_names,
+        title="Confusion per Noise - ENHANCED TRAINED EP20 TEST",
+        save_path=plots_dir / "confusion_per_noise_enhanced_trained_ep20.png"
+    )
+    print("\n=== MISCLASSIFIED ENHANCED TRAINED EP20 ===")
+    mis_enhanced = misclassified_between_two_classes(
+        results["enhanced_trained_ep20"]["t"],
+        results["enhanced_trained_ep20"]["p"],
+        results["enhanced_trained_ep20"]["f"],
+        class_names,
+        a, b,
+        results["enhanced_trained_ep20"]["snr"],
+        results["enhanced_trained_ep20"]["noise"],
+    )
+    if len(mis_enhanced) == 0:
+        print("No misclassifications found between these two classes.")
+    else:
+        print("\nMisclassified files between the pair:")
+        print(tabulate(mis_enhanced, headers="keys", tablefmt="psql", showindex=True))
+        print("\nErrors by SNR:")
+        print(mis_enhanced.groupby("snr_db").size())
+        print("\nErrors by noise:")
+        print(mis_enhanced.groupby("noise").size())
+    run_calc_metrics(df_test_audio=df_test_audio,
+                      sampling_rate=sampling_rate, run_dir=run_dir,
+                      enhanced_root="/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20",
+                      tag="ENHANCED TRAINED EP20")
 
 if __name__ == "__main__":
     cfg_path = Path(__file__).resolve().parents[1] / "config.yaml"

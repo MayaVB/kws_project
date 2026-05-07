@@ -1,15 +1,16 @@
+# config.yaml
 device: auto    # auto / cpu / cuda
 
 output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/runs"
 
 train_mode: "clean"                
 val_mode: "clean"                  
-test_mode: ["clean", "noisy", "denoised", "enhanced","all"]   
+test_mode: ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep10", "enhanced_trained_ep20", "all"]   
 
 # clean data
 clean_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
 folder_start: 0
-folder_end: 4
+folder_end: 5
 
 # background noises
 bg_noise_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"

@@ -8,11 +8,11 @@ from tqdm import tqdm
 
 from kws.src.noise_dataset import mix_with_noise_at_snr
 
-clean_root = "/home/dsi/skopavi/Project/kws_project/data_new"
-noise_root = clean_root + "/_background_noise_"
+clean_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
+noise_root = clean_root + "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
 
-output_root = "/home/dsi/skopavi/Project/kws_project/generated_noisy"
-meta_path = "/home/dsi/skopavi/Project/kws_project/generated_noisy_metadata.csv"
+output_root = "/home/dsi/skopavi/Project/kws_project/data/noisy/generated_noisy"
+meta_path = "/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
 
 os.makedirs(output_root, exist_ok=True)
 

@@ -1,3 +1,4 @@
+# visualization.py
 import os
 import random
 import librosa
@@ -76,18 +77,42 @@ def plot_example_signals(
     # =========================
     # ENHANCED (from disk)
     # =========================
-    enhanced_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained",
+    enhanced_sgmse_path = os.path.join(
+        "/home/dsi/skopavi/Project/kws_project/data/enhanced/pretrained_sgmse/generated_enhanced",
         label,
         filename
     )
 
-    enhanced_sig = None
-    if os.path.exists(enhanced_path):
-        enhanced_sig, _ = librosa.load(enhanced_path, sr=sampling_rate)
-    else:
-        print(f"⚠️ Enhanced file not found: {enhanced_path}")
+    enhanced_trained_ep10_path = os.path.join(
+        "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep10",
+        label,
+        filename
+    )
 
+    enhanced_trained_ep20_path = os.path.join(
+        "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20",
+        label,
+        filename
+    )
+
+
+    enhanced_sgmse_sig = None
+    if os.path.exists(enhanced_sgmse_path):
+        enhanced_sgmse_sig, _ = librosa.load(enhanced_sgmse_path, sr=sampling_rate)
+    else:
+        print(f"⚠️ Enhanced sgmse file not found: {enhanced_sgmse_path}")
+
+    enhanced_trained_ep10_sig = None
+    if os.path.exists(enhanced_trained_ep10_path):
+        enhanced_trained_ep10_sig, _ = librosa.load(enhanced_trained_ep10_path, sr=sampling_rate)
+    else:
+        print(f"⚠️ Enhanced trained ep10 file not found: {enhanced_trained_ep10_path}")
+
+    enhanced_trained_ep20_sig = None
+    if os.path.exists(enhanced_trained_ep20_path):
+        enhanced_trained_ep20_sig, _ = librosa.load(enhanced_trained_ep20_path, sr=sampling_rate)
+    else:
+        print(f"⚠️ Enhanced trained ep20 file not found: {enhanced_trained_ep20_path}")
     # =========================
     # PLOT
     # =========================
@@ -95,7 +120,9 @@ def plot_example_signals(
         clean=clean_sig,
         noisy=noisy_sig,
         denoised=denoised_sig,
-        enhanced=enhanced_sig,
+        enhanced_sgmse=enhanced_sgmse_sig,
+        enhanced_trained_ep10=enhanced_trained_ep10_sig,
+        enhanced_trained_ep20=enhanced_trained_ep20_sig,
         fs=sampling_rate,
         title=f"file={filename} | noise={noise_name} | SNR={snr_db} dB",
         save_path=plots_dir / f"example_{filename}_snr{snr_db}.png"

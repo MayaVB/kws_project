@@ -1,3 +1,4 @@
+# metrics.py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -40,7 +41,8 @@ def plot_history(history, save_path=None):
         plt.show()
 
 
-def confusion_and_report(model, loader, class_names, device, model_name="", return_meta=False, save_path=None):
+def confusion_and_report(model, loader, class_names, device, model_name="",
+                        return_meta=False, save_path=None, save_txt_path=None):
     """
     Build confusion matrix + classification report from a loader that returns (X,y,filename).
     Returns: cm, report_text, (all_true, all_pred, all_filenames)
@@ -79,6 +81,11 @@ def confusion_and_report(model, loader, class_names, device, model_name="", retu
     report = classification_report(all_true, all_pred, target_names=class_names)
     print("Classification Report:")
     print(report)
+    if save_txt_path:
+        with open(save_txt_path, "a") as f:
+            f.write(f"\n{model_name.upper()}\n")
+            f.write(report)
+            f.write("\n")
 
     return cm, report, (np.array(all_true), np.array(all_pred), np.array(all_files))
 
@@ -435,7 +442,9 @@ def _compute_spectrogram(x, fs):
     return f, t, 20 * np.log10(S + 1e-10)
 
 
-def plot_signal_comparison(clean, noisy, denoised, enhanced=None, fs=16000, title="Signal Comparison", save_path=None):
+def plot_signal_comparison(clean, noisy, denoised, enhanced_sgmse=None,
+                            enhanced_trained_ep10=None, enhanced_trained_ep20=None,
+                            fs=16000, title="Signal Comparison", save_path=None):
     """
     Plot waveform + spectrogram for clean / noisy / denoised signals
     """
@@ -444,10 +453,12 @@ def plot_signal_comparison(clean, noisy, denoised, enhanced=None, fs=16000, titl
         ("Clean", clean),
         ("Noisy", noisy),
         ("Denoised", denoised),
-        ("Enhanced", enhanced),
+        ("Enhanced (SGMSE)", enhanced_sgmse),
+        ("Enhanced (Trained EP10)", enhanced_trained_ep10),
+        ("Enhanced (Trained EP20)", enhanced_trained_ep20)
     ]
 
-    fig, axes = plt.subplots(4, 2, figsize=(12, 10))
+    fig, axes = plt.subplots(6, 2, figsize=(12, 10))
 
     for i, (name, sig) in enumerate(signals):
 
@@ -477,7 +488,7 @@ import shutil
 import subprocess
 import soundfile as sf
 
-def run_calc_metrics(df_test_audio, sampling_rate, run_dir):
+def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
 
     TMP_ROOT = "/home/dsi/skopavi/Project/kws_project/tmp/tmp_metrics"
 
@@ -497,7 +508,8 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir):
     print("[METRICS] Saving TEST files...")
 
     noisy_root = "/home/dsi/skopavi/Project/kws_project/data/noisy/generated_noisy"
-    enhanced_root = "/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained"
+    # enhanced_root = "/home/dsi/skopavi/Project/kws_project/data/enhanced_train/generated_enhanced_trained"
+    enhanced_root = enhanced_root
 
     for _, row in df_test_audio.iterrows():
         fname = row["filename"]
@@ -536,7 +548,10 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir):
         --enhanced_dir {enhanced_tmp_dir}
     """
 
-    with open(metrics_out_path, "w") as f:
+    with open(metrics_out_path, "a") as f:
+        f.write(f"\n\n{tag}\n")
+        f.flush()
         subprocess.run(cmd, shell=True, stdout=f, stderr=subprocess.STDOUT)
+        f.write("\n")  
 
     print("[METRICS] Done! Saved to:", metrics_out_path)

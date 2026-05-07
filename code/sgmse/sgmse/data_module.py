@@ -143,6 +143,11 @@ class SpecsDataModule(pl.LightningDataModule):
         self.kwargs = kwargs
 
     def setup(self, stage=None):
+
+        print("BASE DIR:", self.base_dir)
+        print("TRAIN PATH:", join(self.base_dir, "train", "clean"))
+        print("FILES FOUND:", len(glob(join(self.base_dir, "train", "clean", "*.wav"))))
+
         specs_kwargs = dict(
             stft_kwargs=self.stft_kwargs, num_frames=self.num_frames,
             spec_transform=self.spec_fwd, **self.kwargs

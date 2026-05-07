@@ -225,6 +225,7 @@ class ScoreModel(pl.LightningModule):
             # Evaluate the performance of the model
             pesq_sum = 0; si_sdr_sum = 0; estoi_sum = 0; 
             pesq_count = 0
+            estoi_count = 0
             for (clean_file, noisy_file) in zip(clean_files, noisy_files):
                 # Load the clean and noisy speech
                 x, sr_x = load(clean_file)
@@ -253,11 +254,24 @@ class ScoreModel(pl.LightningModule):
                     pass
 
                 si_sdr_sum += si_sdr(x, x_hat)
-                estoi_sum += stoi(x, x_hat, self.sr, extended=True)
+                # estoi_sum += stoi(x, x_hat, self.sr, extended=True)
+                try:
+                    estoi_val = stoi(x, x_hat, self.sr, extended=True)
+                    if estoi_val > 1e-4:   # מסנן garbage
+                        estoi_sum += estoi_val
+                        estoi_count += 1
+                except:
+                    pass
+            
             if pesq_count > 0:
                 pesq_avg = pesq_sum / pesq_count
             else:
                 pesq_avg = 0
+            
+            if estoi_count > 0:
+                estoi_avg = estoi_sum / estoi_count
+            else:
+                estoi_avg = 0
 
             si_sdr_avg = si_sdr_sum / len(clean_files)
             estoi_avg = estoi_sum / len(clean_files)
