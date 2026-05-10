@@ -5,14 +5,15 @@ import librosa
 import soundfile as sf
 import random
 from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
-from kws.src.noise_dataset import mix_with_noise_at_snr
+from noise_onthefly_dataset import mix_with_noise_at_snr
 
 clean_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
-noise_root = clean_root + "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
+noise_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
 
-output_root = "/home/dsi/skopavi/Project/kws_project/data/noisy/generated_noisy"
-meta_path = "/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
+output_root = "/home/dsi/skopavi/Project/kws_project/data/noisy_new"
+meta_path = "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
 
 os.makedirs(output_root, exist_ok=True)
 
@@ -25,7 +26,11 @@ for f in noise_files:
     y, _ = librosa.load(os.path.join(noise_root, f), sr=16000)
     noise_bank[name] = y
 
+
+# build noisy dataset and metadata
 rows = []
+
+all_files = []
 
 folders = [f for f in os.listdir(clean_root)
            if os.path.isdir(os.path.join(clean_root, f))
@@ -35,22 +40,42 @@ folders = sorted(folders)  # ensure consistent order
 
 for label in folders:
     in_dir = os.path.join(clean_root, label)
-    out_dir = os.path.join(output_root, label)
-    os.makedirs(out_dir, exist_ok=True)
-
     files = [f for f in os.listdir(in_dir) if f.endswith(".wav")]
 
-    for fname in tqdm(files, desc=f"Processing {label}"):
+    for fname in files:
+        all_files.append((label, fname))
 
-        path = os.path.join(in_dir, fname)
-        clean, _ = librosa.load(path, sr=16000)
+# SPLIT 
+train_files, valtest_files = train_test_split(
+    all_files, test_size=0.2, random_state=42
+)
+
+val_files, test_files = train_test_split(
+    valtest_files, test_size=0.5, random_state=42
+)
+
+print(f"Train: {len(train_files)}")
+print(f"Val:   {len(val_files)}")
+print(f"Test:  {len(test_files)}")
+
+# PROCESS FUNCTION  
+def process(files_list, split_name, snr_choices):
+
+    for label, fname in tqdm(files_list, desc=f"{split_name}"):
+
+        in_path = os.path.join(clean_root, label, fname)
+
+        clean, _ = librosa.load(in_path, sr=16000)
 
         noise_name = random.choice(list(noise_bank.keys()))
         noise = noise_bank[noise_name]
 
-        snr = random.choice([-10, 0, 10])
+        snr = random.choice(snr_choices)
 
         noisy = mix_with_noise_at_snr(clean, noise, snr)
+
+        out_dir = os.path.join(output_root, split_name, label)
+        os.makedirs(out_dir, exist_ok=True)
 
         out_path = os.path.join(out_dir, fname)
         sf.write(out_path, noisy, 16000)
@@ -59,11 +84,23 @@ for label in folders:
             "filename": fname,
             "label": label,
             "snr": snr,
-            "noise": noise_name
+            "noise": noise_name,
+            "split": split_name
         })
 
-# save metadata
+# RUN 
+
+# TRAIN
+process(train_files, "train", [0, 5, 10])
+
+# VAL
+process(val_files, "val", [0, 5, 10])
+
+# TEST
+process(test_files, "test", [2.5, 7.5, 12.5])
+
+# SAVE META 
 df_meta = pd.DataFrame(rows)
 df_meta.to_csv(meta_path, index=False)
 
-print("✅ Noisy dataset + metadata saved!")
+print("✅ Dataset built!")

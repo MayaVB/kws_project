@@ -2,6 +2,7 @@
 import sys
 import os
 sys.path.append("/home/dsi/skopavi/Project/kws_project/sgmse_repo/sgmse")
+sys.path.append("/home/dsi/skopavi/Project/kws_project/code")
 
 import numpy as np
 import librosa

@@ -16,9 +16,11 @@ def load_config(path: str | Path) -> Dict[str, Any]:
     if not isinstance(cfg, dict):
         raise ValueError("config.yaml must contain a top-level dictionary")
 
+    """
     # basic sanity checks
     ratios = float(cfg["train_ratio"]) + float(cfg["val_ratio"]) + float(cfg["test_ratio"])
     if abs(ratios - 1.0) > 1e-6:
         raise ValueError(f"train/val/test ratios must sum to 1.0, got {ratios}")
+    """
 
     return cfg

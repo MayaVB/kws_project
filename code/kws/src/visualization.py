@@ -4,126 +4,84 @@ import random
 import librosa
 import numpy as np
 
-from noise_dataset import NoisyTestDataset, mix_with_noise_at_snr
+from noise_onthefly_dataset import NoisyTestDataset, mix_with_noise_at_snr
 from kws.denoiser.stft_mask.denoise import denoise_signal
 from metrics import plot_signal_comparison
 
-
 def plot_example_signals(
     df_test_audio,
-    label_encoder,
-    scaler,
     sampling_rate,
-    n_mfcc,
-    max_len,
-    cfg,
     plots_dir,
-    device,
+    noisy_root,
+    enh_pretrained,
+    enh_trained=None, 
     idx_vis=0,
 ):
     """
     Plot example: clean vs noisy vs denoised vs enhanced
-    Independent from main pipeline
+    Uses FIXED test dataset (no randomness)
     """
 
-    # 🔥 create small noisy dataset JUST for noise access
-    example_ds = NoisyTestDataset(
-        audio_list=df_test_audio["audio_data"].values,
-        labels_list=df_test_audio["label"].values,
-        filenames_list=df_test_audio["filename"].values,
-        label_encoder=label_encoder,
-        scaler=scaler,
-        sampling_rate=sampling_rate,
-        n_mfcc=n_mfcc,
-        max_len=max_len,
-        bg_noise_dir=str(cfg["bg_noise_dir"]),
-        noise_ops=list(cfg["noise_ops"]),
-        snr_choices=list(cfg["snr_choices"]),
-        seed=123,
-        mode="noisy",
-        device=device,
-    )
-
-    # =========================
-    # CLEAN
-    # =========================
-    clean_sig = df_test_audio["audio_data"].iloc[idx_vis]
+    # BASIC INFO
     filename = df_test_audio["filename"].iloc[idx_vis]
     label = df_test_audio["label"].iloc[idx_vis]
 
-    # =========================
-    # NOISY
-    # =========================
-    noise_name = example_ds._choose_noise_name()
-    noise_arr = random.choice(example_ds.noise_bank[noise_name])
+    print(f"[EXAMPLE] label={label}, file={filename}")
 
-    snr_db = -10
+    # CLEAN
+    clean_sig = df_test_audio["audio_data"].iloc[idx_vis]
 
-    noisy_sig = mix_with_noise_at_snr(
-        clean=clean_sig,
-        noise=noise_arr,
-        snr_db=snr_db
-    )
+    # NOISY 
+    noisy_path = os.path.join(noisy_root, "test", label, filename)
 
-    # =========================
+    if not os.path.exists(noisy_path):
+        print(f"❌ Missing noisy file: {noisy_path}")
+        return
+
+    noisy_sig, _ = librosa.load(noisy_path, sr=sampling_rate)
+
     # DENOISED
-    # =========================
     denoised_sig = denoise_signal(
         noisy_signal=noisy_sig,
-        fs=sampling_rate,
-        device=device
+        fs=sampling_rate
     )
 
-    # =========================
-    # ENHANCED (from disk)
-    # =========================
+    # ENHANCED SGMSE
     enhanced_sgmse_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/data/enhanced/pretrained_sgmse/generated_enhanced",
+        enh_pretrained,
         label,
         filename
     )
-
-    enhanced_trained_ep10_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep10",
-        label,
-        filename
-    )
-
-    enhanced_trained_ep20_path = os.path.join(
-        "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20",
-        label,
-        filename
-    )
-
 
     enhanced_sgmse_sig = None
     if os.path.exists(enhanced_sgmse_path):
         enhanced_sgmse_sig, _ = librosa.load(enhanced_sgmse_path, sr=sampling_rate)
     else:
-        print(f"⚠️ Enhanced sgmse file not found: {enhanced_sgmse_path}")
+        print(f"⚠️ Missing enhanced SGMSE: {enhanced_sgmse_path}")
 
-    enhanced_trained_ep10_sig = None
-    if os.path.exists(enhanced_trained_ep10_path):
-        enhanced_trained_ep10_sig, _ = librosa.load(enhanced_trained_ep10_path, sr=sampling_rate)
-    else:
-        print(f"⚠️ Enhanced trained ep10 file not found: {enhanced_trained_ep10_path}")
+    # ENHANCED TRAINED EP100
+    enhanced_trained_sig = None
+    
+    if enh_trained is not None:
+        path = os.path.join(enh_trained, label, filename)
+        if os.path.exists(path):
+            enhanced_trained_sig, _ = librosa.load(path, sr=sampling_rate)
+        else:
+            print(f"⚠️ Missing enhanced trained: {path}")
+    
 
-    enhanced_trained_ep20_sig = None
-    if os.path.exists(enhanced_trained_ep20_path):
-        enhanced_trained_ep20_sig, _ = librosa.load(enhanced_trained_ep20_path, sr=sampling_rate)
-    else:
-        print(f"⚠️ Enhanced trained ep20 file not found: {enhanced_trained_ep20_path}")
-    # =========================
     # PLOT
-    # =========================
     plot_signal_comparison(
         clean=clean_sig,
         noisy=noisy_sig,
         denoised=denoised_sig,
         enhanced_sgmse=enhanced_sgmse_sig,
-        enhanced_trained_ep10=enhanced_trained_ep10_sig,
-        enhanced_trained_ep20=enhanced_trained_ep20_sig,
+        enhanced_trained=enhanced_trained_sig,
         fs=sampling_rate,
-        title=f"file={filename} | noise={noise_name} | SNR={snr_db} dB",
-        save_path=plots_dir / f"example_{filename}_snr{snr_db}.png"
+        title=f"{label}/{filename}",
+        save_path=plots_dir / f"example_{filename}.png"
     )
+
+# TODO: add option to plot random examples from the test set (not just fixed idx)
+# TODO: add option to plot examples from the enhanced dataset (not just the noisy dataset)
+# TODO: CHOOSE EXAMPLE WITH SPECIFIC SNR

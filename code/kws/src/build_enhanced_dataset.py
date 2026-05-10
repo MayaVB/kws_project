@@ -5,10 +5,11 @@ import pandas as pd
 import time
 from multiprocessing import Pool
 from math import ceil
+import shutil
 
 # ================= CONFIG ================= #
 
-MODE = "pretrainedd"
+MODE = "trained_ep100"
 # "pretrained"
 # "trained_ep10"
 # "trained_ep20"
@@ -16,26 +17,27 @@ MODE = "pretrainedd"
 BASE_DIR = "/home/dsi/skopavi/Project/kws_project"
 CHUNK_SIZE = 10
 N_WORKERS = 1
-TMP_ROOT = "/tmp/sgmse_chunks"
+TMP_ROOT = "/tmp/enhanced_chunks"
 
-INPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/noisy/generated_noisy"
+INPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
 
-META_IN = "/home/dsi/skopavi/Project/kws_project/data/generated_noisy_metadata.csv"
-META_OUT = "/home/dsi/skopavi/Project/kws_project/data/generated_enhanced_metadata.csv"
+META_IN = "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
+META_OUT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_{MODE}_new_metadata.csv"
 
 # ================= MODE SWITCH ================= #
 
 if MODE == "pretrained":
     CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt"
-    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced/pretrained_sgmse/generated_enhanced"
+    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
 
-elif MODE == "trained_ep10":
-    CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
-    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep10"
+elif MODE == "trained_ep100":
+    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
+    CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/t8xf51rt/epoch=99-last.ckpt"
+    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep100"
 
-elif MODE == "trained_ep20":
-    CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/ph9fp8m3/epoch=19-last.ckpt"
-    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20"
+# elif MODE == "trained_ep20":
+    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/ph9fp8m3/epoch=19-last.ckpt"
+    # OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20"
 
 else:
     raise ValueError(f"Unknown MODE: {MODE}")
@@ -46,6 +48,7 @@ os.makedirs(OUTPUT_ROOT, exist_ok=True)
 os.makedirs(TMP_ROOT, exist_ok=True)
 
 meta_df = pd.read_csv(META_IN)
+meta_df = meta_df[meta_df["split"] == "test"]   
 
 meta_lookup = {
     (row["label"], row["filename"]): row
@@ -69,7 +72,7 @@ def process_chunk(args):
     for f in files:
         src = os.path.join(INPUT_ROOT, folder, f)
         dst = os.path.join(tmp_in, f)
-        os.system(f"cp {src} {dst}")
+        shutil.copy2(src, dst)
 
     # run model
     cmd = f"""
@@ -89,17 +92,21 @@ def process_chunk(args):
 
         if os.path.exists(src):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            os.system(f"mv {src} {dst}")
+            shutil.move(src, dst)
 
             key = (folder, f)
             row = meta_lookup.get(key)
 
             if row is not None:
                 meta_rows.append(row)
+            else:
+                print(f"⚠ Warning: Metadata not found for {key}")
+        else:
+            print(f"⚠ Warning: Enhanced file not found for {f}")
 
     # cleanup
-    os.system(f"rm -rf {tmp_in}")
-    os.system(f"rm -rf {tmp_out}")
+    shutil.rmtree(tmp_in)
+    shutil.rmtree(tmp_out)
 
     return meta_rows
 

@@ -78,4 +78,4 @@ class EnhancedTestDataset(Dataset):
 
         sig_tensor = torch.from_numpy(sig.astype(np.float32))
 
-        return X_tensor, y_tensor, fname, sig_tensor, snr_db, noise_name
+        return X_tensor, y_tensor, fname, snr_db, noise_name, sig_tensor

@@ -340,7 +340,7 @@ def run(cfg: dict):
 
         print(f"test ({mode}): loss={loss:.4f}, acc={acc:.4f}")
 
-        cm, rep, (t, p, f) = confusion_and_report(best_model, loader, class_names, 
+        cm, rep, _ = confusion_and_report(best_model, loader, class_names, 
                                                 device, model_name=f"{mode.upper()}",
                                                 save_txt_path=run_dir / f"classification_reports.txt")
 

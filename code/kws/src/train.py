@@ -209,16 +209,35 @@ def evaluate_loader(model, loader, device=None, return_meta=False):
                 all_pred.extend(preds.cpu().numpy())
                 all_files.extend(filenames)
 
-                # אם dataset מחזיר גם snr ורעש
-                if len(batch) >= 6:
-                    snr_db = batch[4]
-                    noise_name = batch[5]
+                if len(batch) >= 5:
 
+                    if isinstance(batch[3], (float, int, np.floating)) or torch.is_tensor(batch[3]):
+                        # (x, y, f, snr, noise)
+                        snr_db = batch[3]
+                        noise_name = batch[4]
+
+                    else:
+                        # (x, y, f, snr, noise, audio)
+                        snr_db = batch[3]
+                        noise_name = batch[4]
+
+                    # tensor → numpy
                     if torch.is_tensor(snr_db):
                         snr_db = snr_db.cpu().numpy()
 
-                    all_snr.extend(snr_db)
-                    all_noise.extend(noise_name)
+                    if torch.is_tensor(noise_name):
+                        noise_name = noise_name.cpu().numpy()
+
+                    # flatten 
+                    if isinstance(snr_db, (list, tuple, np.ndarray)):
+                        all_snr.extend(list(snr_db))
+                    else:
+                        all_snr.append(snr_db)
+
+                    if isinstance(noise_name, (list, tuple, np.ndarray)):
+                        all_noise.extend(list(noise_name))
+                    else:
+                        all_noise.append(noise_name)
 
     loss = running_loss / total
     acc = correct / total

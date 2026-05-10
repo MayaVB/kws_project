@@ -1,0 +1,28 @@
+# new_config.yaml
+
+device: auto    # auto / cpu / cuda
+
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"
+clean_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
+meta: "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
+noisy_dir: "/home/dsi/skopavi/Project/kws_project/data/noisy_new"
+enh_pretrained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
+enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep100"
+
+folder_start: 0
+folder_end: 20
+
+sampling_rate: 16000
+n_mfcc: 13
+
+batch_size: 64
+num_workers: 0
+
+epochs: 100
+patience: 10
+lr: 0.001
+weight_decay: 0.0001
+
+shuffle_train: true
+use_parallel: true
+random_state: 42

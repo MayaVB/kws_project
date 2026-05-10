@@ -1,3 +1,4 @@
+# calc_metrics.py 
 from os.path import join 
 from glob import glob
 from argparse import ArgumentParser
@@ -29,9 +30,10 @@ if __name__ == '__main__':
 
     # Evaluate standard metrics
     noisy_files = []
-    noisy_files += sorted(glob(join(args.noisy_dir, '*.wav')))
+    # noisy_files += sorted(glob(join(args.noisy_dir, '*.wav')))
     # noisy_files += sorted(glob(join(args.noisy_dir, '**', '*.wav')))
-    noisy_files += sorted(glob(join(args.noisy_dir, '**', '*.wav'), recursive=True))
+    noisy_files = sorted(glob(join(args.noisy_dir, '**', '*.wav'), recursive=True))
+    print(f"DEBUG: Found {len(noisy_files)} noisy files to evaluate in {args.noisy_dir}")
     # for noisy_file in tqdm(noisy_files):
     for noisy_file in noisy_files:
         filename = noisy_file.replace(args.noisy_dir, "")[1:]
