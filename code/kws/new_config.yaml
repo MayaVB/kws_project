@@ -10,7 +10,7 @@ enh_pretrained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrai
 enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep100"
 
 folder_start: 0
-folder_end: 20
+folder_end: 10
 
 sampling_rate: 16000
 n_mfcc: 13

@@ -1,3 +1,4 @@
+# model.py
 import time
 from math import ceil
 import warnings
@@ -13,7 +14,7 @@ from sgmse import sampling
 from sgmse.sdes import SDERegistry
 from sgmse.backbones import BackboneRegistry
 from sgmse.util.inference import evaluate_model
-from sgmse.util.other import pad_spec, si_sdr
+from sgmse.util.other import energy_ratios, pad_spec, si_sdr
 from pesq import pesq
 from pystoi import stoi
 from torch_pesq import PesqLoss
@@ -223,7 +224,11 @@ class ScoreModel(pl.LightningModule):
                 noisy_files = noisy_files[rank*eval_files_per_gpu:(rank+1)*eval_files_per_gpu]  
 
             # Evaluate the performance of the model
-            pesq_sum = 0; si_sdr_sum = 0; estoi_sum = 0; 
+            pesq_sum = 0
+            si_sdr_sum = 0
+            si_sir_sum = 0
+            si_sar_sum = 0
+            estoi_sum = 0
             pesq_count = 0
             estoi_count = 0
             for (clean_file, noisy_file) in zip(clean_files, noisy_files):
@@ -252,12 +257,22 @@ class ScoreModel(pl.LightningModule):
                     pesq_count += 1
                 except:
                     pass
+                
+                n = y.squeeze().numpy() - x
 
-                si_sdr_sum += si_sdr(x, x_hat)
+                si_sdr_val, si_sir_val, si_sar_val = energy_ratios(x_hat,x,n)
+                si_sdr_sum += si_sdr_val
+                si_sir_sum += si_sir_val
+                si_sar_sum += si_sar_val
+
+                # si_sdr_sum += si_sdr(x, x_hat)
+                # si_sir_sum += si_sir(x, x_hat)
+                # si_sar_sum += si_sar(x, x_hat)
                 # estoi_sum += stoi(x, x_hat, self.sr, extended=True)
+
                 try:
                     estoi_val = stoi(x, x_hat, self.sr, extended=True)
-                    if estoi_val > 1e-4:   # מסנן garbage
+                    if estoi_val > 1e-4:   # garbage filter
                         estoi_sum += estoi_val
                         estoi_count += 1
                 except:
@@ -273,8 +288,10 @@ class ScoreModel(pl.LightningModule):
             else:
                 estoi_avg = 0
 
-            si_sdr_avg = si_sdr_sum / len(clean_files)
-            estoi_avg = estoi_sum / len(clean_files)
+            si_sdr_avg = si_sdr_sum / len(clean_files) if len(clean_files) > 0 else 0
+            si_sir_avg = si_sir_sum / len(clean_files) if len(clean_files) > 0 else 0
+            si_sar_avg = si_sar_sum / len(clean_files) if len(clean_files) > 0 else 0
+            
             print(f"PESQ valid: {pesq_count}/{len(clean_files)}")
             """
                 # pesq_sum += pesq(16000, x_16k, x_hat_16k, 'wb') 
@@ -292,8 +309,10 @@ class ScoreModel(pl.LightningModule):
 
             self.log('pesq', pesq_avg, on_step=False, on_epoch=True, sync_dist=True)
             self.log('si_sdr', si_sdr_avg, on_step=False, on_epoch=True, sync_dist=True)
+            self.log('si_sir', si_sir_avg, on_step=False, on_epoch=True, sync_dist=True)
+            self.log('si_sar', si_sar_avg, on_step=False, on_epoch=True, sync_dist=True)
             self.log('estoi', estoi_avg, on_step=False, on_epoch=True, sync_dist=True)
-            self.log('pesq_count', pesq_count)
+            # self.log('pesq_count', pesq_count)
             
         loss = self._step(batch, batch_idx)
         self.log('valid_loss', loss, on_step=False, on_epoch=True, sync_dist=True)

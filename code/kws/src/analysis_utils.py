@@ -57,7 +57,6 @@ def analyze_mode(
 
     if len(mis) == 0:
         print(f"No misclassified for {mode}")
-        return
 
     # PRINT
     print(tabulate(mis, headers="keys", tablefmt="psql"))

@@ -1,3 +1,4 @@
+# train.py
 import torch
 import wandb
 import argparse
@@ -84,24 +85,53 @@ if __name__ == '__main__':
           logger.experiment.log_code(".")
 
      # Set up callbacks for logger
+
+     run_dir = join(args.log_dir, f'{str(logger.version)}-{args.wandb_name}') if logger else None
+
      if logger != None:
-          callbacks = [ModelCheckpoint(dirpath=join(args.log_dir, str(logger.version)), save_last=True, 
-               filename='{epoch}-last')]
-          callbacks += [ModelCheckpoint(dirpath=join(args.log_dir, f'{str(logger.version)}-{args.wandb_name}'),
+          callbacks = [ModelCheckpoint(dirpath=run_dir, save_last=True, filename='{epoch}-last')]
+          callbacks += [ModelCheckpoint(dirpath=run_dir,
                filename='{step}', save_top_k=-1, every_n_train_steps=args.save_ckpt_interval)]
           if args.num_eval_files:
-               checkpoint_callback_pesq = ModelCheckpoint(dirpath=join(args.log_dir, str(logger.version)), 
+               # Save best checkpoints according to metrics
+               # best PESQ checkpoint - perceptual quality
+               checkpoint_callback_pesq = ModelCheckpoint(dirpath=run_dir, 
                     save_top_k=1, monitor="pesq", mode="max", filename='{epoch}-{pesq:.2f}')
-               checkpoint_callback_si_sdr = ModelCheckpoint(dirpath=join(args.log_dir, str(logger.version)), 
+               # best SI-SDR checkpoint - signal reconstruction quality
+               checkpoint_callback_si_sdr = ModelCheckpoint(dirpath=run_dir, 
                     save_top_k=1, monitor="si_sdr", mode="max", filename='{epoch}-{si_sdr:.2f}')
                callbacks += [checkpoint_callback_pesq, checkpoint_callback_si_sdr]
+               # best SI-SIR checkpoint - interference suppression quality
+               checkpoint_callback_si_sir = ModelCheckpoint(dirpath=run_dir,
+                    save_top_k=1, monitor="si_sir", mode="max", filename='{epoch}-{si_sir:.2f}')
+               # best SI-SAR checkpoint - artifact reduction quality
+               checkpoint_callback_si_sar = ModelCheckpoint(dirpath=run_dir,
+                    save_top_k=1, monitor="si_sar", mode="max", filename='{epoch}-{si_sar:.2f}')
+               
+               callbacks += [checkpoint_callback_si_sir, checkpoint_callback_si_sar]
+               
+               # Save checkpoints every 50 epochs
+               checkpoint_callback_epochs = ModelCheckpoint(
+               dirpath=run_dir,
+               filename='epoch{epoch}', save_top_k=-1, every_n_epochs=50)
+
+               # Save checkpoint with best validation loss - for monitoring training progress
+               #  and early stopping if necessary
+               checkpoint_callback_valid_loss = ModelCheckpoint(
+               dirpath=run_dir,
+               save_top_k=1, monitor="valid_loss", mode="min", filename='{epoch}-{valid_loss:.4f}')
+
+               callbacks += [checkpoint_callback_valid_loss, checkpoint_callback_epochs]
+             
      else:
           callbacks = None
 
      # Initialize the Trainer and the DataModule
      trainer = pl.Trainer(
           **vars(arg_groups['Trainer']),
-          strategy="ddp", logger=logger,
+          # strategy="ddp", 
+          strategy='auto',
+          logger=logger,
           default_root_dir=args.log_dir,
           log_every_n_steps=10, num_sanity_val_steps=0,
           callbacks=callbacks
