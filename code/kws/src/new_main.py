@@ -5,8 +5,10 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import json
 import librosa
+import math
 import numpy as np
 import pandas as pd
+from tabulate import tabulate
 from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -46,6 +48,7 @@ def run(cfg: dict):
     noisy_root = str(cfg["noisy_dir"])
     enh_pretrained = str(cfg["enh_pretrained"])
     enh_trained = str(cfg["enh_trained"])
+    enh_new_dir = str(cfg["enh_new_dir"])
 
     batch_size = int(cfg["batch_size"])
     use_parallel = bool(cfg["use_parallel"])
@@ -148,31 +151,64 @@ def run(cfg: dict):
 
     # TEST MODES
     # test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse"]
-    test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep100"]
+    # test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep100"]
+
+    modes_config = {
+
+        "clean": {
+            "type": "clean"
+        },
+
+        "noisy": {
+            "type": "noisy",
+            "root": os.path.join(noisy_root, "test")
+        },
+
+        "denoised": {
+            "type": "denoised",
+            "root": os.path.join(noisy_root, "test")
+        },
+    }
+
+    enhanced_parent = Path(enh_new_dir)
+    for folder in sorted(enhanced_parent.iterdir()):
+
+        if not folder.is_dir():
+            continue
+
+        name = folder.name.lower()
+        mode_name = f"enh_{name}"
+        modes_config[mode_name] = {
+            "type": "enhanced",
+            "root": str(folder)
+        }
 
     # PICK RANDOM CLASS PAIR FOR MISCLASSIFICATION ANALYSIS
     a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
     print(f"Random pair for misclassification analysis: {a} vs {b}")
 
     results = {}
-
-    for mode in test_modes:
-
-        print(f"\n=== {mode.upper()} ===")
+    all_metrics = []
+    
+    for mode_name, mode_cfg in modes_config.items():
+        print(f"\n=== {mode_name.upper()} ===")
+        mode_type = mode_cfg["type"]
 
         # CLEAN
-        if mode == "clean":
+        if mode_type == "clean":
             loader = test_loader_clean
-
             loss, acc, t, p, f, *_ = evaluate_loader(
-                best_model, loader, device=device, return_meta=True
+                best_model,
+                loader,
+                device=device,
+                return_meta=True
             )
             snr = None
             noise = None
             t_c, p_c = t, p  
 
         # NOISY
-        elif mode == "noisy":
+        elif mode_type == "noisy":
             loader = DataLoader(
                 FixedNoisyDataset(
                     root=os.path.join(noisy_root, "test"),
@@ -191,9 +227,9 @@ def run(cfg: dict):
             )
 
         # DENOISED
-        elif mode == "denoised":
+        elif mode_type == "denoised":
             base = FixedNoisyDataset(
-                root=os.path.join(noisy_root, "test"),
+                root=mode_cfg["root"],
                 labels_list=df_test["label"].values,
                 filenames_list=df_test["filename"].values,
                 label_encoder=label_encoder,
@@ -212,14 +248,14 @@ def run(cfg: dict):
                     n_mfcc,
                     scaler,
                     X_train.shape[1],
-                    root=os.path.join(noisy_root, "test")   
+                    root=mode_cfg["root"]   
                 ),
                 batch_size=batch_size,
                 shuffle=False
 )
 
-        # ENHANCED PRETRAINED
-        elif mode == "enhanced_sgmse":
+        # ENHANCED 
+        elif mode_type == "enhanced":
             loader = DataLoader(
                 EnhancedTestDataset(
                     labels_list=df_test["label"].values,
@@ -229,25 +265,7 @@ def run(cfg: dict):
                     sampling_rate=sampling_rate,
                     n_mfcc=n_mfcc,
                     max_len=X_train.shape[1],
-                    enhanced_root=enh_pretrained,
-                    meta_csv=meta_path
-                ),
-                batch_size=batch_size,
-                shuffle=False
-            )
-
-        # ENHANCED TRAINED
-        elif mode == "enhanced_trained_ep100":
-            loader = DataLoader(
-                EnhancedTestDataset(
-                    labels_list=df_test["label"].values,
-                    filenames_list=df_test["filename"].values,
-                    label_encoder=label_encoder,
-                    scaler=scaler,
-                    sampling_rate=sampling_rate,
-                    n_mfcc=n_mfcc,
-                    max_len=X_train.shape[1],
-                    enhanced_root=enh_trained,
+                    enhanced_root=mode_cfg["root"],
                     meta_csv=meta_path
                 ),
                 batch_size=batch_size,
@@ -259,11 +277,11 @@ def run(cfg: dict):
             best_model, loader, device=device, return_meta=True
         )
 
-        if mode == "clean":
+        if mode_type == "clean":
             snr = None
             noise = None
 
-        results[mode] = {
+        results[mode_name] = {
             "acc": acc,
             "loss": loss,
             "t": t,
@@ -273,19 +291,20 @@ def run(cfg: dict):
             "noise": noise
         }
 
-        print(f"\ntest ({mode}): loss={loss:.4f}, acc={acc:.4f}\n")
+        print(f"\ntest ({mode_name}): loss={loss:.4f}, acc={acc:.4f}\n")
         
         cm, rep, _ = confusion_and_report(
         best_model,
         loader,
         class_names,
         device=device,
-        model_name=mode,
+        model_name=mode_name,
         save_txt_path=run_dir / "reports.txt")
 
-        analyze_mode(
-            mode=mode,
-            results=results[mode],
+        metrics_dict = analyze_mode(
+            acc,
+            mode=mode_name,
+            results=results[mode_name],
             class_names=class_names,
             plots_dir=plots_dir,
             run_dir=run_dir,
@@ -293,39 +312,44 @@ def run(cfg: dict):
             b=b,
             df_test_audio=df_test_audio,
             sampling_rate=sampling_rate,
-            enhanced_root=(enh_pretrained if mode == "enhanced_sgmse" else
-            enh_trained if mode == "enhanced_trained_ep100" else None)
+            enhanced_root=(mode_cfg["root"] if mode_type == "enhanced" else None)
         )
+        if metrics_dict is not None:
+            all_metrics.append(metrics_dict)
 
+    enhanced_versions = {}
+    for mode_name, mode_cfg in modes_config.items():
+        if mode_cfg["type"] == "enhanced":
+            enhanced_versions[mode_name] = mode_cfg["root"]
+    
     plot_example_signals(
     df_test_audio=df_test_audio,
     sampling_rate=sampling_rate,
     plots_dir=plots_dir,
     noisy_root=noisy_root,
-    enh_pretrained=enh_pretrained,
-    enh_trained=enh_trained,
-    idx_vis=8,)
+    enhanced_versions=enhanced_versions,
+    idx_vis=8,
+    )
 
     # CONFUSION MATRICES
     print("\n=== CONFUSION MATRICES COMPARISON ===")
     
-    fig, axes = plt.subplots(2, 3, figsize=(14, 10))
-    # fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    axes = axes.flatten()
-    titles = [
-        "Clean Test",
-        "Noisy Test",
-        "Denoised Test",
-        "Enhanced SGMSE Test",
-        "Enhanced Trained Ep100 Test"
-    ]
-    pairs = [
-        ("Clean", t_c, p_c),
-        ("Noisy", results["noisy"]["t"], results["noisy"]["p"]),
-        ("Denoised", results["denoised"]["t"], results["denoised"]["p"]),
-        ("Enhanced SGMSE", results["enhanced_sgmse"]["t"], results["enhanced_sgmse"]["p"]),
-        ("Enhanced Trained Ep100", results["enhanced_trained_ep100"]["t"], results["enhanced_trained_ep100"]["p"]),
-    ]
+    pairs = []
+
+    for mode_name, mode_res in results.items():
+        pairs.append((mode_name, mode_res["t"], mode_res["p"]))
+
+    n_modes = len(pairs)
+    ncols = 3
+    nrows = math.ceil(n_modes / ncols)
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(5*ncols, 4*nrows)
+    )
+
+    axes = np.array(axes).reshape(-1)
 
     print("DEBUG: starting confusion matrices block")
 
@@ -333,7 +357,7 @@ def run(cfg: dict):
         print(f"DEBUG: {name} len={len(t)}")
         cm = confusion_matrix(t, p)
         sns.heatmap(
-            cm,
+            cm,          
             ax=axes[i],
             annot=True,
             fmt="d",
@@ -341,9 +365,31 @@ def run(cfg: dict):
             xticklabels=class_names,
             yticklabels=class_names
         )
-        axes[i].set_title(titles[i])
+        axes[i].set_title(name)
         axes[i].set_xlabel("Predicted")
         axes[i].set_ylabel("True")
+
+        single_fig, single_ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(
+            cm,
+            ax=single_ax,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+        single_ax.set_title(name)
+        plt.tight_layout()
+        plt.savefig(
+            plots_dir / f"confusion_{name}.png"
+        )
+        plt.close(single_fig)
+
+    for j in range(len(pairs), len(axes)):
+        axes[j].axis("off")
+
+        
 
     print("DEBUG: finished loop")
 
@@ -354,6 +400,29 @@ def run(cfg: dict):
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(plots_dir / "confusion_matrices.png")
     plt.close()
+
+    if len(all_metrics) > 0:
+        df_metrics = pd.DataFrame(all_metrics)
+        df_metrics = df_metrics.fillna("-")
+        # df_metrics = df_metrics.sort_values("pesq", ascending=False)
+        print("\n=== METRICS TABLE ===")
+        print(df_metrics)
+        df_metrics.to_csv(
+            run_dir / "metrics_comparison.csv",
+            index=False
+        )
+
+        table_str = tabulate(
+        df_metrics,
+        headers="keys",
+        tablefmt="fancy_grid",
+        showindex=False
+    )
+
+    print(table_str)
+
+    with open(run_dir / "metrics_comparison.txt", "w") as f:
+        f.write(table_str)
 
 
 if __name__ == "__main__":

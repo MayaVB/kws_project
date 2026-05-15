@@ -447,23 +447,32 @@ def _compute_spectrogram(x, fs):
     return f, t, 20 * np.log10(S + 1e-10)
 
 
-def plot_signal_comparison(clean, noisy, denoised, enhanced_sgmse=None,
-                            enhanced_trained=None,
+def plot_signal_comparison(clean, noisy, denoised, enhanced_signals=None,
                             fs=16000, title="Signal Comparison", save_path=None):
     """
     Plot waveform + spectrogram for clean / noisy / denoised signals
     """
 
     signals = [
-        ("Clean", clean),
-        ("Noisy", noisy),
-        ("Denoised", denoised),
-        ("Enhanced (SGMSE)", enhanced_sgmse),
-        ("Enhanced (Trained EP100)", enhanced_trained),
-        ]
-    
+    ("Clean", clean),
+    ("Noisy", noisy),
+    ("Denoised", denoised),
+    ]
 
-    fig, axes = plt.subplots(5, 2, figsize=(12, 10))
+    for method_name, sig in enhanced_signals.items():
+        signals.append(
+            (
+                f"Enhanced ({method_name})",
+                sig
+            )
+        )
+
+    n_signals = len(signals)
+    fig, axes = plt.subplots(
+        n_signals,
+        2,
+        figsize=(12, 2*n_signals)
+    )
 
     for i, (name, sig) in enumerate(signals):
 
@@ -747,9 +756,25 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
     print("\n[METRICS OUTPUT]")
     print(result.stdout)
 
+    metrics = {}
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("PESQ:"):
+            metrics["pesq"] = (line.replace("PESQ:", "").split("(N=")[0].strip())
+        elif line.startswith("ESTOI:"):
+            metrics["estoi"] = (line.replace("ESTOI:", "").split("(N=")[0].strip())
+        elif line.startswith("SI-SDR:"):
+            metrics["si_sdr"] = (line.replace("SI-SDR:", "").split("(N=")[0].strip())
+        elif line.startswith("SI-SIR:"):
+            metrics["si_sir"] = (line.replace("SI-SIR:", "").split("(N=")[0].strip())
+        elif line.startswith("SI-SAR:"):
+            metrics["si_sar"] = (line.replace("SI-SAR:", "").split("(N=")[0].strip())
+
     with open(metrics_out_path, "a") as f:
         f.write(f"\n\n{tag}\n")
         f.write(result.stdout)
         f.write("\n")
 
     print("[METRICS] Done! Saved to:", metrics_out_path)
+
+    return metrics

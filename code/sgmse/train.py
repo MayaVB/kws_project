@@ -97,10 +97,13 @@ if __name__ == '__main__':
                # best PESQ checkpoint - perceptual quality
                checkpoint_callback_pesq = ModelCheckpoint(dirpath=run_dir, 
                     save_top_k=1, monitor="pesq", mode="max", filename='{epoch}-{pesq:.2f}')
+               # best ESTOI checkpoint - intelligibility
+               checkpoint_callback_estoi = ModelCheckpoint(dirpath=run_dir,
+                    save_top_k=1, monitor="estoi", mode="max", filename='{epoch}-{estoi:.2f}')
+               callbacks += [checkpoint_callback_estoi, checkpoint_callback_pesq]
                # best SI-SDR checkpoint - signal reconstruction quality
                checkpoint_callback_si_sdr = ModelCheckpoint(dirpath=run_dir, 
                     save_top_k=1, monitor="si_sdr", mode="max", filename='{epoch}-{si_sdr:.2f}')
-               callbacks += [checkpoint_callback_pesq, checkpoint_callback_si_sdr]
                # best SI-SIR checkpoint - interference suppression quality
                checkpoint_callback_si_sir = ModelCheckpoint(dirpath=run_dir,
                     save_top_k=1, monitor="si_sir", mode="max", filename='{epoch}-{si_sir:.2f}')
@@ -108,7 +111,7 @@ if __name__ == '__main__':
                checkpoint_callback_si_sar = ModelCheckpoint(dirpath=run_dir,
                     save_top_k=1, monitor="si_sar", mode="max", filename='{epoch}-{si_sar:.2f}')
                
-               callbacks += [checkpoint_callback_si_sir, checkpoint_callback_si_sar]
+               callbacks += [checkpoint_callback_si_sdr, checkpoint_callback_si_sir, checkpoint_callback_si_sar]
                
                # Save checkpoints every 50 epochs
                checkpoint_callback_epochs = ModelCheckpoint(
@@ -129,8 +132,8 @@ if __name__ == '__main__':
      # Initialize the Trainer and the DataModule
      trainer = pl.Trainer(
           **vars(arg_groups['Trainer']),
-          # strategy="ddp", 
-          strategy='auto',
+          strategy="ddp", 
+          # strategy='auto',
           logger=logger,
           default_root_dir=args.log_dir,
           log_every_n_steps=10, num_sanity_val_steps=0,

@@ -209,6 +209,16 @@ class ScoreModel(pl.LightningModule):
             rank = dist.get_rank()
             world_size = dist.get_world_size()
 
+            """
+            # if use strategy="auto" at traiter in train.py
+            if dist.is_available() and dist.is_initialized():
+                rank = dist.get_rank()
+                world_size = dist.get_world_size()
+            else:
+                rank = 0
+                world_size = 1
+            """
+
             # Split the evaluation files among the GPUs
             eval_files_per_gpu = self.num_eval_files // world_size
 

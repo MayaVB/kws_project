@@ -1,5 +1,6 @@
 # visualization.py
 import os
+from os import path
 import random
 import librosa
 import numpy as np
@@ -13,8 +14,7 @@ def plot_example_signals(
     sampling_rate,
     plots_dir,
     noisy_root,
-    enh_pretrained,
-    enh_trained=None, 
+    enhanced_versions,  # dict of {mode_name: enhanced_root}
     idx_vis=0,
 ):
     """
@@ -46,40 +46,25 @@ def plot_example_signals(
         fs=sampling_rate
     )
 
-    # ENHANCED SGMSE
-    enhanced_sgmse_path = os.path.join(
-        enh_pretrained,
-        label,
-        filename
-    )
-
-    enhanced_sgmse_sig = None
-    if os.path.exists(enhanced_sgmse_path):
-        enhanced_sgmse_sig, _ = librosa.load(enhanced_sgmse_path, sr=sampling_rate)
-    else:
-        print(f"⚠️ Missing enhanced SGMSE: {enhanced_sgmse_path}")
-
-    # ENHANCED TRAINED EP100
-    enhanced_trained_sig = None
-    
-    if enh_trained is not None:
-        path = os.path.join(enh_trained, label, filename)
+    # ENHANCED
+    enhanced_signals = {}
+    for method_name, root in enhanced_versions.items():
+        path = os.path.join(root, label, filename)
         if os.path.exists(path):
-            enhanced_trained_sig, _ = librosa.load(path, sr=sampling_rate)
+            sig, _ = librosa.load(path, sr=sampling_rate)
+            enhanced_signals[method_name] = sig
         else:
-            print(f"⚠️ Missing enhanced trained: {path}")
-    
+            print(f"⚠️ Missing enhanced: {path}")
 
     # PLOT
     plot_signal_comparison(
         clean=clean_sig,
         noisy=noisy_sig,
         denoised=denoised_sig,
-        enhanced_sgmse=enhanced_sgmse_sig,
-        enhanced_trained=enhanced_trained_sig,
+        enhanced_signals=enhanced_signals,
         fs=sampling_rate,
         title=f"{label}/{filename}",
-        save_path=plots_dir / f"example_{filename}.png"
+        save_path=plots_dir / f"Signal_Comparison_Example_{filename}.png"
     )
 
 # TODO: add option to plot random examples from the test set (not just fixed idx)

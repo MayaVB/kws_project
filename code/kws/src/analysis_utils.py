@@ -1,9 +1,11 @@
+# analysis_utils.py
 from tabulate import tabulate
 import pandas as pd
 
 from metrics import plot_confusion_per_snr, plot_confusion_per_noise, misclassified_between_two_classes, run_calc_metrics
 
 def analyze_mode(
+    acc,
     mode,
     results,
     class_names,
@@ -84,13 +86,22 @@ def analyze_mode(
             print("\nErrors by noise:")
             print(mis.groupby("noise").size())
 
+    metrics_dict = {
+    "mode": mode,
+    "acc": round(acc, 4)
+    }
+
     if enhanced_root is not None:
         print(f"\n=== METRICS {mode.upper()} ===")
 
-        run_calc_metrics(
+        enh_metrics = run_calc_metrics(
             df_test_audio=df_test_audio,
             sampling_rate=sampling_rate,
             run_dir=run_dir,
             enhanced_root=enhanced_root,
             tag=mode.upper()
-    )
+        )
+        metrics_dict.update(enh_metrics)
+        return metrics_dict
+    
+    return metrics_dict
