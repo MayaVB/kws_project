@@ -77,6 +77,58 @@ if __name__ == '__main__':
           }
      )
 
+     # freeze
+     if args.ckpt is not None:
+          print(f"\nLoading pretrained weights from: {args.ckpt}\n")
+
+          checkpoint = torch.load(
+               args.ckpt,
+               map_location="cpu",
+               weights_only=False
+          )
+          model.load_state_dict(checkpoint["state_dict"], strict=False)
+
+     """
+     # fine-tuning mode: freeze DNN parameters and only train the SDE parameters (if any)
+     print("\nDEBUG: MODEL PARAMETER NAMES\n")
+     with open("layers.txt", "w") as f:
+          for name, param in model.dnn.named_parameters():
+               f.write(name + "\n")
+
+     exit()
+     """
+     # FREEZE EVERYTHING
+     for param in model.dnn.parameters():
+          param.requires_grad = False
+
+     # UNFREEZE LAST BLOCKS
+     for name, param in model.dnn.named_parameters():
+          if (
+               "output_layer" in name
+               or "all_modules.65" in name
+               or "all_modules.66" in name
+               or "all_modules.67" in name
+               or "all_modules.68" in name
+               or "all_modules.69" in name
+               or "all_modules.70" in name
+               or "all_modules.71" in name
+               or "all_modules.72" in name
+               or "all_modules.73" in name
+               or "all_modules.74" in name
+               or "all_modules.75" in name
+               or "all_modules.76" in name
+          ):
+               param.requires_grad = True
+               print(f"TRAINABLE: {name}")
+
+     total_params = sum(p.numel() for p in model.parameters())
+     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+     print("\n===================================")
+     print(f"Total params: {total_params:,}")
+     print(f"Trainable params: {trainable_params:,}")
+     print( f"Trainable ratio: " f"{100 * trainable_params / total_params:.2f}%")
+     print("===================================\n")
+
      # Set up logger configuration
      if args.nolog:
           logger = None
@@ -89,42 +141,46 @@ if __name__ == '__main__':
      run_dir = join(args.log_dir, f'{str(logger.version)}-{args.wandb_name}') if logger else None
 
      if logger != None:
-          callbacks = [ModelCheckpoint(dirpath=run_dir, save_last=True, filename='{epoch}-last')]
-          callbacks += [ModelCheckpoint(dirpath=run_dir,
-               filename='{step}', save_top_k=-1, every_n_train_steps=args.save_ckpt_interval)]
+          callbacks = []
+
+          # LAST CHECKPOINT 
+          checkpoint_callback_last = ModelCheckpoint(dirpath=run_dir, save_last=True, filename='{epoch}-last')
+          callbacks += [checkpoint_callback_last]
+
+          #  PERIODIC EPOCH CHECKPOINTS
+          checkpoint_callback_epochs = ModelCheckpoint(dirpath=run_dir, filename='epoch{epoch}', save_top_k=-1, every_n_epochs=50)
+          callbacks += [checkpoint_callback_epochs]
+
+          # METRIC-BASED CHECKPOINTS (only if num_eval_files > 0, i.e. we are calculating metrics during training)
           if args.num_eval_files:
                # Save best checkpoints according to metrics
                # best PESQ checkpoint - perceptual quality
                checkpoint_callback_pesq = ModelCheckpoint(dirpath=run_dir, 
-                    save_top_k=1, monitor="pesq", mode="max", filename='{epoch}-{pesq:.2f}')
+                    save_top_k=1, monitor="pesq", mode="max", filename='best_pesq-{epoch}-{pesq:.2f}')
                # best ESTOI checkpoint - intelligibility
                checkpoint_callback_estoi = ModelCheckpoint(dirpath=run_dir,
-                    save_top_k=1, monitor="estoi", mode="max", filename='{epoch}-{estoi:.2f}')
+                    save_top_k=1, monitor="estoi", mode="max", filename='best_estoi-{epoch}-{estoi:.2f}')
                callbacks += [checkpoint_callback_estoi, checkpoint_callback_pesq]
+
                # best SI-SDR checkpoint - signal reconstruction quality
                checkpoint_callback_si_sdr = ModelCheckpoint(dirpath=run_dir, 
-                    save_top_k=1, monitor="si_sdr", mode="max", filename='{epoch}-{si_sdr:.2f}')
+                    save_top_k=1, monitor="si_sdr", mode="max", filename='best_si_sdr-{epoch}-{si_sdr:.2f}')
                # best SI-SIR checkpoint - interference suppression quality
                checkpoint_callback_si_sir = ModelCheckpoint(dirpath=run_dir,
-                    save_top_k=1, monitor="si_sir", mode="max", filename='{epoch}-{si_sir:.2f}')
+                    save_top_k=1, monitor="si_sir", mode="max", filename='best_si_sir-{epoch}-{si_sir:.2f}')
                # best SI-SAR checkpoint - artifact reduction quality
                checkpoint_callback_si_sar = ModelCheckpoint(dirpath=run_dir,
-                    save_top_k=1, monitor="si_sar", mode="max", filename='{epoch}-{si_sar:.2f}')
+                    save_top_k=1, monitor="si_sar", mode="max", filename='best_si_sar-{epoch}-{si_sar:.2f}')
                
                callbacks += [checkpoint_callback_si_sdr, checkpoint_callback_si_sir, checkpoint_callback_si_sar]
-               
-               # Save checkpoints every 50 epochs
-               checkpoint_callback_epochs = ModelCheckpoint(
-               dirpath=run_dir,
-               filename='epoch{epoch}', save_top_k=-1, every_n_epochs=50)
 
                # Save checkpoint with best validation loss - for monitoring training progress
                #  and early stopping if necessary
                checkpoint_callback_valid_loss = ModelCheckpoint(
                dirpath=run_dir,
-               save_top_k=1, monitor="valid_loss", mode="min", filename='{epoch}-{valid_loss:.4f}')
+               save_top_k=1, monitor="valid_loss", mode="min", filename='best_validloss-{epoch}-{valid_loss:.4f}')
 
-               callbacks += [checkpoint_callback_valid_loss, checkpoint_callback_epochs]
+               callbacks += [checkpoint_callback_valid_loss]
              
      else:
           callbacks = None
@@ -141,4 +197,9 @@ if __name__ == '__main__':
      )
 
      # Train model
-     trainer.fit(model, ckpt_path=args.ckpt)
+
+     # regular training
+     # trainer.fit(model, ckpt_path=args.ckpt)
+
+     # freeze
+     trainer.fit(model)
