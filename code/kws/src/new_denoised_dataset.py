@@ -15,7 +15,7 @@ class DenoisedDataset(Dataset):
         self.n_mfcc = n_mfcc
         self.scaler = scaler
         self.max_len = max_len
-        self.root = root   # 🔥 חשוב!
+        self.root = root  
 
     def __len__(self):
         return len(self.base)
@@ -29,7 +29,6 @@ class DenoisedDataset(Dataset):
 
         audio, _ = librosa.load(path, sr=self.sr)
 
-        # 🔥 יישור אורך
         audio = librosa.util.fix_length(audio, size=self.sr)
 
         # denoise

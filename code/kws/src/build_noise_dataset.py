@@ -89,7 +89,6 @@ def process(files_list, split_name, snr_choices):
         })
 
 # RUN 
-
 # TRAIN
 process(train_files, "train", [0, 5, 10])
 

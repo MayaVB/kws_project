@@ -9,7 +9,7 @@ def denoise_signal(
     n_fft=1024,
     hop=256,
     win="hamming",
-    threshold=0.6,
+    threshold=0.4,
     device="cpu",
     # use_unet=False,
     # unet_model=None,

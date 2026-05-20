@@ -6,11 +6,12 @@ output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"
 clean_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
 meta: "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
 noisy_dir: "/home/dsi/skopavi/Project/kws_project/data/noisy_new"
-enh_pretrained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
-enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep100"
+enh_baseline: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/baseline"
+enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep166"
+enh_new_dir : "/home/dsi/skopavi/Project/kws_project/data/enhanced_new"
 
-folder_start: 0
-folder_end: 10
+folder_start: 19
+folder_end: 25
 
 sampling_rate: 16000
 n_mfcc: 13

@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import soundfile as sf
 import sys
+import time
 
 
 
@@ -151,7 +152,7 @@ def pick_random_class_pair(class_names, seed=123):
     a, b = rng.sample(list(class_names), 2)
     return a, b
 
-def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, snr=None, noise=None, max_rows=20):
+def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, snr=None, noise=None, max_rows=50):
     """
     Show misclassifications A->B.
     t,p are integer class indices, f filenames.
@@ -751,7 +752,16 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
         --enhanced_dir {enhanced_tmp_dir}
     """
 
+    metrics_start = time.time()
+
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+    metrics_time = time.time() - metrics_start
+
+    print(
+        f"\nMETRICS TIME: "
+        f"{metrics_time/60:.2f} minutes"
+    )
 
     print("\n[METRICS OUTPUT]")
     print(result.stdout)

@@ -54,6 +54,21 @@ def train_model(model, train_loader, val_loader,
     # Move model to CPU/GPU
     model = model.to(device)
 
+    # Count total and trainable parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(
+        p.numel()
+        for p in model.parameters()
+        if p.requires_grad
+    )
+    print("DEBUG: MODEL PARAMETERS")
+    print(f"Total parameters:      {total_params:,}")
+    print(f"Trainable parameters:  {trainable_params:,}")
+    print(
+        f"Trainable ratio: "
+        f"{100 * trainable_params / total_params:.2f}%"
+    )
+
     best_val_acc = 0.0
     epochs_no_improve = 0
 

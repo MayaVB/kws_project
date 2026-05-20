@@ -6,6 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 import json
 import librosa
 import math
+import time
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
@@ -34,7 +35,7 @@ from features import add_mfcc_column, apply_scaler, fit_scaler
 from analysis_utils import analyze_mode
 
 def run(cfg: dict):
-        
+    total_start = time.time()
     # CONFIG
     device = get_device(cfg["device"])
     sampling_rate = int(cfg["sampling_rate"])
@@ -44,11 +45,11 @@ def run(cfg: dict):
     folder_start = int(cfg["folder_start"])
     folder_end = int(cfg["folder_end"])
 
-    meta_path = str(cfg["meta"])   # ✅ FIX
+    meta_path = str(cfg["meta"])  
     noisy_root = str(cfg["noisy_dir"])
-    enh_pretrained = str(cfg["enh_pretrained"])
-    enh_trained = str(cfg["enh_trained"])
     enh_new_dir = str(cfg["enh_new_dir"])
+    enh_trained = str(cfg["enh_trained"])
+    enh_baseline = str(cfg["enh_baseline"])
 
     batch_size = int(cfg["batch_size"])
     use_parallel = bool(cfg["use_parallel"])
@@ -68,7 +69,7 @@ def run(cfg: dict):
     print("Run dir:", run_dir)
 
     # LOAD METADATA
-    meta_df = pd.read_csv(meta_path)   # ✅ FIX
+    meta_df = pd.read_csv(meta_path) 
 
     # SELECT FOLDERS
     all_folders = sorted(meta_df["label"].unique())
@@ -136,6 +137,8 @@ def run(cfg: dict):
     # TRAIN
     model = DSCNN(len(class_names))
 
+    train_start = time.time()
+
     hist = train_model(
         model, train_loader, val_loader,
         num_epochs=int(cfg["epochs"]),
@@ -146,13 +149,13 @@ def run(cfg: dict):
         best_dir=models_dir
     )
 
+    train_time = time.time() - train_start
+    print(f"\nTRAINING TIME: {train_time/60:.2f} minutes")
+
     best_model = load_model(DSCNN, len(class_names), hist["best_path"], device=device)
     plot_history(hist, save_path=plots_dir / "training_history.png")
 
     # TEST MODES
-    # test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse"]
-    # test_modes = ["clean", "noisy", "denoised", "enhanced_sgmse", "enhanced_trained_ep100"]
-
     modes_config = {
 
         "clean": {
@@ -164,24 +167,15 @@ def run(cfg: dict):
             "root": os.path.join(noisy_root, "test")
         },
 
-        "denoised": {
-            "type": "denoised",
-            "root": os.path.join(noisy_root, "test")
-        },
-    }
-
-    enhanced_parent = Path(enh_new_dir)
-    for folder in sorted(enhanced_parent.iterdir()):
-
-        if not folder.is_dir():
-            continue
-
-        name = folder.name.lower()
-        mode_name = f"enh_{name}"
-        modes_config[mode_name] = {
+        "enh_baseline": {
             "type": "enhanced",
-            "root": str(folder)
+            "root": os.path.join(enh_baseline)
+        },
+        "enh_trained": {
+            "type": "enhanced",
+            "root": os.path.join(enh_trained)
         }
+    }
 
     # PICK RANDOM CLASS PAIR FOR MISCLASSIFICATION ANALYSIS
     a, b = pick_random_class_pair(class_names, seed=int(cfg.get("mis_seed", 123)))
@@ -194,6 +188,8 @@ def run(cfg: dict):
         print(f"\n=== {mode_name.upper()} ===")
         mode_type = mode_cfg["type"]
 
+        eval_start = time.time()
+
         # CLEAN
         if mode_type == "clean":
             loader = test_loader_clean
@@ -205,7 +201,6 @@ def run(cfg: dict):
             )
             snr = None
             noise = None
-            t_c, p_c = t, p  
 
         # NOISY
         elif mode_type == "noisy":
@@ -225,34 +220,6 @@ def run(cfg: dict):
                 batch_size=batch_size,
                 shuffle=False
             )
-
-        # DENOISED
-        elif mode_type == "denoised":
-            base = FixedNoisyDataset(
-                root=mode_cfg["root"],
-                labels_list=df_test["label"].values,
-                filenames_list=df_test["filename"].values,
-                label_encoder=label_encoder,
-                scaler=scaler,
-                sampling_rate=sampling_rate,
-                n_mfcc=n_mfcc,
-                max_len=X_train.shape[1],
-                meta_csv=meta_path,
-                split="test"
-            )
-
-            loader = DataLoader(
-                DenoisedDataset(
-                    base,
-                    sampling_rate,
-                    n_mfcc,
-                    scaler,
-                    X_train.shape[1],
-                    root=mode_cfg["root"]   
-                ),
-                batch_size=batch_size,
-                shuffle=False
-)
 
         # ENHANCED 
         elif mode_type == "enhanced":
@@ -277,6 +244,12 @@ def run(cfg: dict):
             best_model, loader, device=device, return_meta=True
         )
 
+        eval_time = time.time() - eval_start
+
+        print(
+            f"\nEVALUATION TIME ({mode_name}): "
+            f"{eval_time:.2f} sec")
+
         if mode_type == "clean":
             snr = None
             noise = None
@@ -293,7 +266,7 @@ def run(cfg: dict):
 
         print(f"\ntest ({mode_name}): loss={loss:.4f}, acc={acc:.4f}\n")
         
-        cm, rep, _ = confusion_and_report(
+        cm, _, _ = confusion_and_report(
         best_model,
         loader,
         class_names,
@@ -333,22 +306,28 @@ def run(cfg: dict):
 
     # CONFUSION MATRICES
     print("\n=== CONFUSION MATRICES COMPARISON ===")
+
+    confusion_modes = ["clean", "noisy", "enh_trained"]
+    DISPLAY_NAMES = {
+        "clean": "Clean",
+        "noisy": "Noisy",
+        "enh_baseline": "Enhanced Baseline",
+        "enh_trained": "Enhanced Trained"}
     
     pairs = []
 
-    for mode_name, mode_res in results.items():
+    for mode_name in confusion_modes:
+        if mode_name not in results:
+            print(f"WARNING: {mode_name} not found in results")
+            continue
+        mode_res = results[mode_name]
         pairs.append((mode_name, mode_res["t"], mode_res["p"]))
 
     n_modes = len(pairs)
     ncols = 3
-    nrows = math.ceil(n_modes / ncols)
+    nrows = 1
 
-    fig, axes = plt.subplots(
-        nrows,
-        ncols,
-        figsize=(5*ncols, 4*nrows)
-    )
-
+    fig, axes = plt.subplots(nrows, ncols, figsize=(7*ncols, 6))
     axes = np.array(axes).reshape(-1)
 
     print("DEBUG: starting confusion matrices block")
@@ -356,6 +335,7 @@ def run(cfg: dict):
     for i, (name, t, p) in enumerate(pairs):
         print(f"DEBUG: {name} len={len(t)}")
         cm = confusion_matrix(t, p)
+        display_name = DISPLAY_NAMES.get(name, name)
         sns.heatmap(
             cm,          
             ax=axes[i],
@@ -365,9 +345,12 @@ def run(cfg: dict):
             xticklabels=class_names,
             yticklabels=class_names
         )
-        axes[i].set_title(name)
-        axes[i].set_xlabel("Predicted")
-        axes[i].set_ylabel("True")
+        axes[i].set_title(display_name, fontsize=14, fontweight="bold")
+        axes[i].set_xlabel("Predicted", fontsize=12)
+        axes[i].set_ylabel("True", fontsize=12)
+
+        # axes[i].tick_params(axis='x', rotation=45)
+        # axes[i].tick_params(axis='y', rotation=0)
 
         single_fig, single_ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(
@@ -379,26 +362,27 @@ def run(cfg: dict):
             xticklabels=class_names,
             yticklabels=class_names
         )
-        single_ax.set_title(name)
+        single_ax.set_title(display_name, fontsize=14, fontweight="bold")
+        single_ax.set_xlabel("Predicted", fontsize=13)
+
+        single_ax.set_ylabel("True", fontsize=13)
+        # single_ax.tick_params(axis='x', rotation=45)
+        # single_ax.tick_params(axis='y', rotation=0)
         plt.tight_layout()
         plt.savefig(
             plots_dir / f"confusion_{name}.png"
         )
         plt.close(single_fig)
 
+    # hide empty axes
     for j in range(len(pairs), len(axes)):
         axes[j].axis("off")
 
-        
-
     print("DEBUG: finished loop")
-
-    # hide empty subplot
-    # axes[-1].axis("off")
 
     plt.suptitle("Confusion Matrices Comparison", fontsize=16)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(plots_dir / "confusion_matrices.png")
+    plt.savefig(plots_dir / "confusion_matrices_comparison.png")
     plt.close()
 
     if len(all_metrics) > 0:
@@ -423,6 +407,14 @@ def run(cfg: dict):
 
     with open(run_dir / "metrics_comparison.txt", "w") as f:
         f.write(table_str)
+
+    total_time = time.time() - total_start
+    print("\n===================================")
+    print(f"TOTAL PROGRAM TIME: {total_time/60:.2f} minutes")
+    print("===================================\n")
+
+    with open(run_dir / "runtime_report.txt", "a") as f:
+        f.write(f"\nTOTAL PROGRAM TIME: {total_time:.2f} sec\n")
 
 
 if __name__ == "__main__":
