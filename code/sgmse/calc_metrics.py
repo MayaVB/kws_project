@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # noisy_files += sorted(glob(join(args.noisy_dir, '*.wav')))
     # noisy_files += sorted(glob(join(args.noisy_dir, '**', '*.wav')))
     noisy_files = sorted(glob(join(args.noisy_dir, '**', '*.wav'), recursive=True))
-    print(f"DEBUG: Found {len(noisy_files)} noisy files to evaluate in {args.noisy_dir}")
+    # print(f"DEBUG: Found {len(noisy_files)} noisy files to evaluate in {args.noisy_dir}")
     # for noisy_file in tqdm(noisy_files):
     for noisy_file in noisy_files:
         filename = noisy_file.replace(args.noisy_dir, "")[1:]

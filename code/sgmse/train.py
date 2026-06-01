@@ -105,11 +105,6 @@ if __name__ == '__main__':
      for name, param in model.dnn.named_parameters():
           if (
                "output_layer" in name
-               or "all_modules.65" in name
-               or "all_modules.66" in name
-               or "all_modules.67" in name
-               or "all_modules.68" in name
-               or "all_modules.69" in name
                or "all_modules.70" in name
                or "all_modules.71" in name
                or "all_modules.72" in name

@@ -7,11 +7,14 @@ clean_dir: "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
 meta: "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
 noisy_dir: "/home/dsi/skopavi/Project/kws_project/data/noisy_new"
 enh_baseline: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/baseline"
-enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep166"
+enh_trained: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep176"
 enh_new_dir : "/home/dsi/skopavi/Project/kws_project/data/enhanced_new"
+best_model_path: "/home/dsi/skopavi/Project/kws_project/outputs/dscnn_full_dataset_best/best_model.pt"
+scaler_path: "/home/dsi/skopavi/Project/kws_project/outputs/dscnn_full_dataset_best/scaler.pkl"
+label_encoder_path: "/home/dsi/skopavi/Project/kws_project/outputs/dscnn_full_dataset_best/label_encoder.pkl"
 
-folder_start: 19
-folder_end: 25
+folder_start: 0
+folder_end: 3
 
 sampling_rate: 16000
 n_mfcc: 13
@@ -19,7 +22,7 @@ n_mfcc: 13
 batch_size: 64
 num_workers: 0
 
-epochs: 100
+epochs: 150
 patience: 10
 lr: 0.001
 weight_decay: 0.0001

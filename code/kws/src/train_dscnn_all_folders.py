@@ -1,13 +1,14 @@
-# new_main.py
+# train_dscnn_all_folders.py
+# FULL TRAINING PIPELINE WITH ALL FOLDERS (1-30)
 from __future__ import annotations
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import json
 import librosa
+import joblib
 import math
 import time
-import joblib
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
@@ -33,7 +34,7 @@ from config import load_config
 from train import get_device, load_model, train_model, evaluate_loader
 from dataset import list_folders, collect_wav_paths, make_label_encoder, make_loaders, pad_mfcc_list
 from features import add_mfcc_column, apply_scaler, fit_scaler
-from analysis_utils import analyze_mode, compare_prediction_modes
+from analysis_utils import analyze_mode
 
 def run(cfg: dict):
     total_start = time.time()
@@ -58,7 +59,7 @@ def run(cfg: dict):
 
     # DIRECTORIES
     run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_dir = output_dir / f"{run_stamp}"
+    run_dir = output_dir / "dscnn_full_dataset_best"
     models_dir = run_dir / "models"
     plots_dir = run_dir / "plots"
 
@@ -121,6 +122,8 @@ def run(cfg: dict):
     label_encoder, y_train_enc, y_val_enc, y_test_enc = make_label_encoder(y_train, y_val, y_test)
 
     class_names = label_encoder.classes_
+    print("\nCLASS NAMES:")
+    print(class_names)
 
     fn_train = df_train["filename"].values
     fn_val   = df_val["filename"].values
@@ -137,8 +140,8 @@ def run(cfg: dict):
 
 
     joblib.dump(
-        scaler,
-        models_dir / "scaler.pkl"
+    scaler,
+    models_dir / "scaler.pkl"
     )
 
     joblib.dump(
@@ -169,11 +172,10 @@ def run(cfg: dict):
 
     best_model = load_model(DSCNN, len(class_names), hist["best_path"], device=device)
     plot_history(hist, save_path=plots_dir / "training_history.png")
-    
 
     # LOAD BEST MODEL (TRAIN ALL)
-    # best_model_path = cfg["best_model_path"]
-    # best_model = load_model(DSCNN, len(class_names), best_model_path, device=device)
+    best_model_path = cfg["best_model_path"]
+    best_model = load_model(DSCNN, len(class_names), best_model_path, device=device)
 
     # TEST MODES
     modes_config = {
@@ -187,17 +189,16 @@ def run(cfg: dict):
             "root": os.path.join(noisy_root, "test")
         },
         
-        "enh_baseline": {
-            "type": "enhanced",
-            "root": os.path.join(enh_baseline)
-        },
-        "enh_trained": {
-            "type": "enhanced",
-            "root": os.path.join(enh_trained)
-        } 
+        # "enh_baseline": {
+            # "type": "enhanced",
+            # "root": os.path.join(enh_baseline)
+        # },
+        # "enh_trained": {
+            # "type": "enhanced",
+            # "root": os.path.join(enh_trained)
+        # }
     }
 
-    """
     enhanced_parent = Path(enh_new_dir)
     for folder in sorted(enhanced_parent.iterdir()):
 
@@ -210,7 +211,7 @@ def run(cfg: dict):
             "type": "enhanced",
             "root": str(folder)
         }
-    """
+
 
 
     # PICK RANDOM CLASS PAIR FOR MISCLASSIFICATION ANALYSIS
@@ -280,66 +281,6 @@ def run(cfg: dict):
             best_model, loader, device=device, return_meta=True
         )
 
-        # =====================================
-        # SAVE MISCLASSIFICATIONS FOR GRADIO
-        # =====================================
-
-        pred_df = pd.DataFrame({
-            "filename": f,
-            "true_idx": t,
-            "pred_idx": p
-        })
-
-        pred_df["true_label"] = label_encoder.inverse_transform(
-            pred_df["true_idx"]
-        )
-
-        pred_df["pred_label"] = label_encoder.inverse_transform(
-            pred_df["pred_idx"]
-        )
-
-        pred_df["correct"] = (
-            pred_df["true_label"]
-            ==
-            pred_df["pred_label"]
-        )
-
-        pred_df["mode"] = mode_name
-
-        # add metadata if available
-        if snr is not None and len(snr) == len(pred_df):
-            pred_df["snr"] = snr
-
-        if noise is not None and len(noise) == len(pred_df):
-            pred_df["noise"] = noise
-
-        # keep only mistakes
-        mis_df = pred_df[
-            pred_df["correct"] == False
-        ].copy()
-
-        # sort nicely
-        mis_df = mis_df.sort_values(
-            ["true_label", "pred_label", "filename"]
-        )
-
-        mis_df.to_csv(
-            run_dir / f"{mode_name}_misclassified.csv",
-            index=False
-        )
-
-        pred_df.to_csv(
-            run_dir / f"{mode_name}_all_predictions.csv",
-            index=False
-        )
-
-        print(
-            f"Saved {len(mis_df)} misclassified samples "
-            f"for {mode_name}"
-        )
-                
-        # ##################################
-
         eval_time = time.time() - eval_start
 
         print(
@@ -385,25 +326,6 @@ def run(cfg: dict):
         )
         if metrics_dict is not None:
             all_metrics.append(metrics_dict)
-
-    # =====================================
-    # COMPARE MODES
-    # =====================================
-
-    compare_prediction_modes(
-        clean_csv=run_dir /
-        "clean_all_predictions.csv",
-
-        noisy_csv=run_dir /
-        "noisy_all_predictions.csv",
-
-        enh_csv=run_dir /
-        "enh_trained_all_predictions.csv",
-
-        output_dir=run_dir
-    )
-
-    # =====================================
 
     enhanced_versions = {}
     for mode_name, mode_cfg in modes_config.items():

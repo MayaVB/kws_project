@@ -18,6 +18,7 @@ import time
 
 
 
+
 def plot_history(history, save_path=None):
     epochs_range = range(1, len(history["train_loss"]) + 1)
 
@@ -61,30 +62,43 @@ def confusion_and_report(model, loader, class_names, device, model_name="",
             X_batch = batch[0]
             y_batch = batch[1]
             fn_batch = batch[2]
-            
+
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
-            preds = outputs.argmax(dim=1)
 
+            preds = outputs.argmax(dim=1)
             all_true.extend(y_batch.numpy())
             all_pred.extend(preds.cpu().numpy())
             all_files.extend(list(fn_batch))
 
-    cm = confusion_matrix(all_true, all_pred)
+    # ONLY TRUE LABELS INSIDE CURRENT SUBSET
+    labels_subset = sorted(np.unique(all_true))
+
+    cm = confusion_matrix(
+        all_true,
+        all_pred,
+        labels=labels_subset)
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
                 xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
-    plt.title(f"Confusion Matrix – {model_name}")
+    plt.title(f"Confusion Matrix - {model_name}")
     if save_path:
         plt.savefig(save_path)
         plt.close()
     else:
         plt.show()
 
-    report = classification_report(all_true, all_pred, target_names=class_names)
+    # SUBSET ACCURACY/REPORT - ONLY SELECTED FOLDERS
+    report = classification_report(
+        all_true,
+        all_pred,
+        labels=labels_subset,
+        target_names=class_names,
+        zero_division=0)
+    
     print("Classification Report:")
     print(report)
     if save_txt_path:
@@ -143,9 +157,6 @@ def plot_two_confusion_matrices(
     else:
         plt.show()
 
-
-# TODO
-# add random choise of classes to misclassified
 
 def pick_random_class_pair(class_names, seed=123):
     rng = random.Random(seed)
@@ -213,7 +224,6 @@ def find_misclassified_files(all_true, all_pred, all_files,
         "pred_label": [pred_label_name] * len(mis_files),
     })
     return df
-
 
 # Helpers: single consistent split by indices
 def make_split_indices(labels: np.ndarray,
@@ -448,7 +458,9 @@ def _compute_spectrogram(x, fs):
     return f, t, 20 * np.log10(S + 1e-10)
 
 
-def plot_signal_comparison(clean, noisy, denoised, enhanced_signals=None,
+def plot_signal_comparison(clean, noisy,
+                            # denoised, 
+                            enhanced_signals=None,
                             fs=16000, title="Signal Comparison", save_path=None):
     """
     Plot waveform + spectrogram for clean / noisy / denoised signals
@@ -457,7 +469,7 @@ def plot_signal_comparison(clean, noisy, denoised, enhanced_signals=None,
     signals = [
     ("Clean", clean),
     ("Noisy", noisy),
-    ("Denoised", denoised),
+    # ("Denoised", denoised),
     ]
 
     for method_name, sig in enhanced_signals.items():
@@ -468,7 +480,7 @@ def plot_signal_comparison(clean, noisy, denoised, enhanced_signals=None,
             )
         )
 
-    n_signals = len(signals)
+    n_signals = len(signals) 
     fig, axes = plt.subplots(
         n_signals,
         2,
@@ -498,139 +510,13 @@ def plot_signal_comparison(clean, noisy, denoised, enhanced_signals=None,
     else:
         plt.show()
 
-"""
-def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
-
-    TMP_ROOT = "/home/dsi/skopavi/Project/kws_project/tmp/tmp_metrics"
-
-    test_dir = os.path.join(TMP_ROOT, "test")
-    clean_dir = os.path.join(test_dir, "clean")
-    noisy_dir = os.path.join(test_dir, "noisy")
-    enhanced_tmp_dir = os.path.join(TMP_ROOT, "enhanced")
-
-    print("\n[METRICS] Reset TMP...")
-    if os.path.exists(TMP_ROOT):
-        shutil.rmtree(TMP_ROOT)
-
-    os.makedirs(clean_dir, exist_ok=True)
-    os.makedirs(noisy_dir, exist_ok=True)
-    os.makedirs(enhanced_tmp_dir, exist_ok=True)
-
-    print("[METRICS] Saving TEST files...")
-
-    noisy_root = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
-    enhanced_root = enhanced_root
-
-    count = 0
-    print("\n[DEBUG] Checking file consistency...\n")
-    missing_clean = []
-    missing_noisy = []
-    missing_enhanced = []
-    ok_files = []
-
-    for _, row in df_test_audio.iterrows():
-        fname = row["filename"]
-        label = row["label"]
-
-        # CLEAN
-        clean_path = os.path.join(clean_dir, fname)
-        sf.write(clean_path, row["audio_data"], sampling_rate)
-
-        # NOISY (copy)
-        noisy_src = os.path.join(noisy_root, label, fname)
-        noisy_dst = os.path.join(noisy_dir, fname)
-
-        if os.path.exists(noisy_src):
-            shutil.copy2(noisy_src, noisy_dst)
-
-        # ENHANCED (copy + flatten)
-        enhanced_src = os.path.join(enhanced_root, label, fname)
-        enhanced_dst = os.path.join(enhanced_tmp_dir, fname)
-
-        has_noisy = os.path.exists(noisy_src)
-        has_enhanced = os.path.exists(enhanced_src)
-        if not has_noisy:
-            missing_noisy.append((label, fname))
-        if not has_enhanced:
-            missing_enhanced.append((label, fname))
-        if has_noisy and has_enhanced:
-            ok_files.append((label, fname))
-
-        if os.path.exists(noisy_src) and os.path.exists(enhanced_src):
-            count += 1
-            shutil.copy2(enhanced_src, enhanced_dst)
-
-    print("DEBUG: FILES USED FOR METRICS:", count)
-    print(f"\nTOTAL df_test_audio: {len(df_test_audio)}")
-    print("DEBUG: MISSING CLEAN FILES:", len(missing_clean))
-    print("DEBUG: MISSING NOISY FILES:", len(missing_noisy))
-    print("DEBUG: MISSING ENHANCED FILES:", len(missing_enhanced))
-    print("DEBUG: OK FILES:", len(ok_files))
-
-    MAX_PRINT = 10
-    if missing_noisy:
-        print("\n[DEBUG] Missing in NOISY:")
-        for label, fname in missing_noisy[:MAX_PRINT]:
-            print(f"NOISY MISSING → {label}/{fname}")
-    if missing_enhanced:
-        print("\n[DEBUG] Missing in ENHANCED:")
-        for label, fname in missing_enhanced[:MAX_PRINT]:
-            print(f"ENHANCED MISSING → {label}/{fname}")
-    only_noisy = []
-    only_enhanced = []
-    for _, row in df_test_audio.iterrows():
-        fname = row["filename"]
-        label = row["label"]
-        noisy_src = os.path.join(noisy_root, label, fname)
-        enhanced_src = os.path.join(enhanced_root, label, fname)
-        if os.path.exists(noisy_src) and not os.path.exists(enhanced_src):
-            only_noisy.append((label, fname))
-        if os.path.exists(enhanced_src) and not os.path.exists(noisy_src):
-            only_enhanced.append((label, fname))
-    if only_noisy:
-        print("\n[DEBUG] Exists ONLY in NOISY:")
-        for label, fname in only_noisy[:MAX_PRINT]:
-            print(f"ONLY NOISY → {label}/{fname}")
-    if only_enhanced:
-        print("\n[DEBUG] Exists ONLY in ENHANCED:")
-        for label, fname in only_enhanced[:MAX_PRINT]:
-            print(f"ONLY ENHANCED → {label}/{fname}")
-
-    print("[METRICS] Running calc_metrics...")
-
-    metrics_out_path = run_dir / "metrics.txt"
-
-    print(clean_dir)
-    print(noisy_dir)
-    print(enhanced_tmp_dir)
-    print("DEBUG:")
-    print("df_test_audio:", len(df_test_audio))
-    print("noisy_tmp:", len(os.listdir(noisy_dir)))
-    print("enhanced_tmp:", len(os.listdir(enhanced_tmp_dir)))
-
-    # cmd = f
-    # python /home/dsi/skopavi/Project/kws_project/code/sgmse/calc_metrics.py \
-        # --clean_dir {clean_dir} \
-        # --noisy_dir {noisy_dir} \
-        # --enhanced_dir {enhanced_tmp_dir}
-    
-
-    with open(metrics_out_path, "a") as f:
-        f.write(f"\n\n{tag}\n")
-        f.flush()
-        subprocess.run(cmd, shell=True, stdout=f, stderr=subprocess.STDOUT)
-        f.write("\n") 
-
-    print("[METRICS] Done! Saved to:", metrics_out_path)
-
-"""
 
 def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
 
-    import os, shutil, subprocess
-    import soundfile as sf
-
-    TMP_ROOT = "/home/dsi/skopavi/Project/kws_project/tmp/tmp_metrics"
+    TMP_ROOT = os.path.join(
+    "/home/dsi/skopavi/Project/kws_project/tmp",
+    f"tmp_metrics_{tag}_{os.getpid()}_{int(time.time())}"
+)
 
     test_dir = os.path.join(TMP_ROOT, "test")
     clean_dir = os.path.join(test_dir, "clean")
@@ -639,28 +525,22 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
 
     noisy_root = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
 
-    # =========================
     # RESET TMP
-    # =========================
-    print("\n[METRICS] Reset TMP...")
-    if os.path.exists(TMP_ROOT):
-        shutil.rmtree(TMP_ROOT)
+    # print("[METRICS] Reset TMP...")
+    # if os.path.exists(TMP_ROOT):
+        # shutil.rmtree(TMP_ROOT)
 
     os.makedirs(clean_dir)
     os.makedirs(noisy_dir)
     os.makedirs(enhanced_tmp_dir)
 
-    # =========================
     # DEBUG STORAGE
-    # =========================
     missing_noisy = []
     missing_enhanced = []
     used_files = []
 
-    # =========================
     # MAIN LOOP
-    # =========================
-    print("[METRICS] Building dataset for metrics...\n")
+    print("[METRICS] Building dataset for metrics...")
 
     for _, row in df_test_audio.iterrows():
 
@@ -673,9 +553,7 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
         has_noisy = os.path.exists(noisy_src)
         has_enhanced = os.path.exists(enhanced_src)
 
-        # =========================
         # DEBUG TRACKING
-        # =========================
         if not has_noisy:
             missing_noisy.append((label, fname))
             continue
@@ -684,17 +562,12 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
             missing_enhanced.append((label, fname))
             continue
 
-        # =========================
         # COPY ONLY VALID FILES
-        # =========================
         safe_name = f"{label}__{fname}"
 
         clean_path = os.path.join(clean_dir, safe_name)
         noisy_dst = os.path.join(noisy_dir, safe_name)
         enhanced_dst = os.path.join(enhanced_tmp_dir, safe_name)
-        # clean_path = os.path.join(clean_dir, fname)
-        # noisy_dst = os.path.join(noisy_dir, fname)
-        # enhanced_dst = os.path.join(enhanced_tmp_dir, fname)
 
         sf.write(clean_path, row["audio_data"], sampling_rate)
         shutil.copy2(noisy_src, noisy_dst)
@@ -702,9 +575,8 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
 
         used_files.append((label, fname))
 
-    # =========================
+    """
     # DEBUG PRINTS
-    # =========================
     print("====================================")
     print("[DEBUG SUMMARY]")
     print("====================================")
@@ -738,10 +610,10 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
     assert len(os.listdir(clean_dir)) == len(os.listdir(noisy_dir)) == len(os.listdir(enhanced_tmp_dir)), \
         "❌ Mismatch between clean/noisy/enhanced!"
 
-    # =========================
+    """
+
     # RUN METRICS
-    # =========================
-    print("\n[METRICS] Running calc_metrics...")
+    print("[METRICS] Running calc_metrics...")
 
     metrics_out_path = run_dir / "metrics.txt"
 

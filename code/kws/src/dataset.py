@@ -210,3 +210,29 @@ def make_loaders(
 
     return train_loader, val_loader, test_loader
 
+def make_test_loader(
+    X_test,
+    y_test,
+    fn_test,
+    batch_size=64,
+    num_workers=0
+):
+    """
+    Create ONLY test DataLoader.
+    Same behavior as make_loaders().
+    """
+
+    test_ds = MFCCDataset(
+        X_test,
+        y_test,
+        fn_test
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers
+    )
+
+    return test_loader

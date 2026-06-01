@@ -41,10 +41,10 @@ def plot_example_signals(
     noisy_sig, _ = librosa.load(noisy_path, sr=sampling_rate)
 
     # DENOISED
-    denoised_sig = denoise_signal(
-        noisy_signal=noisy_sig,
-        fs=sampling_rate
-    )
+    # denoised_sig = denoise_signal(
+        # noisy_signal=noisy_sig,
+        # fs=sampling_rate
+    # )
 
     # ENHANCED
     enhanced_signals = {}
@@ -60,7 +60,7 @@ def plot_example_signals(
     plot_signal_comparison(
         clean=clean_sig,
         noisy=noisy_sig,
-        denoised=denoised_sig,
+        # denoised=denoised_sig,
         enhanced_signals=enhanced_signals,
         fs=sampling_rate,
         title=f"{label}/{filename}",
