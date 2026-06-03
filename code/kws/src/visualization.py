@@ -1,11 +1,19 @@
-# visualization.py
+"""
+visualization.py
+
+This module contains:
+- training history plots
+- confusion matrix visualizations
+- SNR and noise analysis plots
+- waveform and spectrogram comparisons
+- enhanced speech visualizations
+"""
 import os
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
 from scipy.signal import stft
 
 def plot_example_signals(
@@ -17,10 +25,15 @@ def plot_example_signals(
     idx_vis=0,
 ):
     """
-    Plot example: clean vs noisy vs denoised vs enhanced
-    Uses FIXED test dataset (no randomness)
-    """
+    Plot a representative test example.
 
+    The figure compares:
+    - clean speech
+    - noisy speech
+    - one or more enhanced versions
+
+    The example is selected from the fixed test dataset.
+    """
     # BASIC INFO
     filename = df_test_audio["filename"].iloc[idx_vis]
     label = df_test_audio["label"].iloc[idx_vis]
@@ -39,12 +52,6 @@ def plot_example_signals(
 
     noisy_sig, _ = librosa.load(noisy_path, sr=sampling_rate)
 
-    # DENOISED
-    # denoised_sig = denoise_signal(
-        # noisy_signal=noisy_sig,
-        # fs=sampling_rate
-    # )
-
     # ENHANCED
     enhanced_signals = {}
     for method_name, root in enhanced_versions.items():
@@ -59,18 +66,23 @@ def plot_example_signals(
     plot_signal_comparison(
         clean=clean_sig,
         noisy=noisy_sig,
-        # denoised=denoised_sig,
         enhanced_signals=enhanced_signals,
         fs=sampling_rate,
         title=f"{label}/{filename}",
         save_path=plots_dir / f"Signal_Comparison_Example_{filename}.png"
     )
 
-# TODO: add option to plot random examples from the test set (not just fixed idx)
-# TODO: add option to plot examples from the enhanced dataset (not just the noisy dataset)
-# TODO: CHOOSE EXAMPLE WITH SPECIFIC SNR
-
 def plot_history(history, save_path=None):
+    """
+    Plot training and validation loss/accuracy curves.
+
+    Parameters
+    ----------
+    history : dict
+        Training history returned by train_model().
+    save_path : str or Path, optional
+        Output path. If None, display interactively.
+    """
     epochs_range = range(1, len(history["train_loss"]) + 1)
 
     plt.figure(figsize=(12, 5))
@@ -99,6 +111,9 @@ def plot_history(history, save_path=None):
         plt.show()
 
 def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names, title, save_path=None):
+    """
+    Plot confusion matrices separately for each SNR level.
+    """
     true_labels = np.asarray(true_labels)
     pred_labels = np.asarray(pred_labels)
     snr_values = np.asarray(snr_values)
@@ -139,6 +154,9 @@ def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names, ti
         plt.show()
 
 def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names, title, save_path=None):
+    """
+    Plot confusion matrices separately for each noise type.
+    """
     true_labels = np.asarray(true_labels)
     pred_labels = np.asarray(pred_labels)
     noise_names = np.asarray(noise_names)
@@ -175,32 +193,39 @@ def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names,
         plt.show()
 
 def _compute_spectrogram(x, fs):
+    """
+    Compute a log-magnitude STFT spectrogram.
+    """
     f, t, Zxx = stft(x, fs=fs, nperseg=512, noverlap=256)
     S = np.abs(Zxx)
     return f, t, 20 * np.log10(S + 1e-10)
 
 
 def plot_signal_comparison(clean, noisy,
-                            # denoised, 
                             enhanced_signals=None,
                             fs=16000, title="Signal Comparison", save_path=None):
     """
-    Plot waveform + spectrogram for clean / noisy / denoised signals
-    """
+    Plot waveform and spectrogram comparisons for:
 
+    - clean speech
+    - noisy speech
+    - one or more enhanced versions
+    """
     signals = [
     ("Clean", clean),
     ("Noisy", noisy),
-    # ("Denoised", denoised),
     ]
 
-    for method_name, sig in enhanced_signals.items():
-        signals.append(
-            (
-                f"Enhanced ({method_name})",
-                sig
+    if enhanced_signals is not None:
+        for method_name, sig in enhanced_signals.items():
+            signals.append(
+                (
+                    f"Enhanced ({method_name})",
+                    sig
+                )
             )
-        )
+    else:
+        print("No enhanced signals provided for comparison.")   
 
     n_signals = len(signals) 
     fig, axes = plt.subplots(
@@ -239,10 +264,16 @@ def plot_confusion_comparison(
     confusion_modes=None
 ):
     """
-    Plot and save confusion matrices for multiple modes.
-    Also saves individual confusion matrix figures.
-    """
+    Generate side-by-side confusion matrices for multiple modes.
 
+    Examples:
+    - clean
+    - noisy
+    - enhanced baseline
+    - enhanced trained
+
+    Individual confusion matrices are also saved separately.
+    """
     if confusion_modes is None:
         confusion_modes = [
             "clean",
@@ -370,3 +401,7 @@ def plot_confusion_comparison(
     )
 
     plt.close()
+
+# TODO: add option to plot random examples
+# TODO: add option to plot examples from enhanced dataset
+# TODO: choose example with specific SNR

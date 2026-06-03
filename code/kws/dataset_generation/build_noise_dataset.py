@@ -1,4 +1,18 @@
-# build_noise_dataset.py
+"""
+build_noise_dataset.py
+
+Generate a noisy speech dataset from clean speech samples.
+
+Pipeline:
+1. Load clean speech files
+2. Split files into train/val/test
+3. Add random background noise
+4. Save noisy audio files
+5. Generate metadata CSV
+
+This script is intended for dataset creation
+and is not part of the training/evaluation pipeline.
+"""
 import os
 import pandas as pd
 import librosa
@@ -6,8 +20,7 @@ import soundfile as sf
 import random
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-
-from noise_onthefly_dataset import mix_with_noise_at_snr
+from noise_utils import mix_with_noise_at_snr
 
 clean_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
 noise_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
@@ -60,6 +73,16 @@ print(f"Test:  {len(test_files)}")
 
 # PROCESS FUNCTION  
 def process(files_list, split_name, snr_choices):
+    """
+    Generate noisy versions of a list of audio files.
+
+    For each sample:
+    - select a random noise source
+    - select a random SNR
+    - mix clean and noise
+    - save noisy waveform
+    - record metadata
+    """
 
     for label, fname in tqdm(files_list, desc=f"{split_name}"):
 

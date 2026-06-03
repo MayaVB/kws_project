@@ -14,7 +14,8 @@ scaler_path: "/home/dsi/skopavi/Project/kws_project/outputs/dscnn_full_dataset_b
 label_encoder_path: "/home/dsi/skopavi/Project/kws_project/outputs/dscnn_full_dataset_best/label_encoder.pkl"
 
 folder_start: 0
-folder_end: 3
+folder_end: 30
+selected_folders: ["three", "tree"]  # If specified, this will override folder_start and folder_end
 
 sampling_rate: 16000
 n_mfcc: 13

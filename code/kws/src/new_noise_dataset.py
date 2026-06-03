@@ -1,5 +1,13 @@
-# new_noise_dataset.py
+"""
+new_noise_dataset.py
 
+Dataset wrapper for evaluating keyword classification
+on pre-generated noisy speech samples.
+
+The dataset loads noisy audio files, extracts MFCC
+features, applies normalization and returns optional
+SNR/noise metadata for analysis.
+"""
 import os
 import librosa
 import numpy as np
@@ -9,9 +17,21 @@ from torch.utils.data import Dataset
 
 
 class FixedNoisyDataset(Dataset):
+    """
+    Dataset for evaluating keyword classification
+    on fixed noisy audio files.
+
+    Each sample returns:
+
+    - MFCC tensor
+    - encoded label
+    - filename
+    - SNR value
+    - noise type
+    """
     def __init__(
         self,
-        root,                  # noisy_new/test
+        root,                 
         labels_list,
         filenames_list,
         label_encoder,
@@ -23,8 +43,8 @@ class FixedNoisyDataset(Dataset):
         split="test",       
     ):
         self.root = root
-        self.labels = labels_list
-        self.filenames = filenames_list
+        self.labels = list(labels_list)
+        self.filenames = list(filenames_list)
         self.le = label_encoder
         self.scaler = scaler
         self.sr = sampling_rate
@@ -47,22 +67,34 @@ class FixedNoisyDataset(Dataset):
                     str(row["noise"])
                 )
 
-        # print(f"[FixedNoisyDataset] Loaded {len(self.meta_dict)} metadata entries for split={self.split}")
-
     def __len__(self):
         return len(self.filenames)
 
     def __getitem__(self, idx):
+        """
+        Load a noisy speech sample and prepare it
+        for DS-CNN inference.
+
+        Returns
+        -------
+        (
+            mfcc_tensor,
+            encoded_label,
+            filename,
+            snr_db,
+            noise_name
+        )
+        """
         fname = self.filenames[idx]
         label = self.labels[idx]
 
         path = os.path.join(self.root, label, fname)
 
-        # LOAD AUDIO
+        # Load and normalize audio length
         audio, _ = librosa.load(path, sr=self.sr)
         audio = librosa.util.fix_length(audio, size=self.sr)
 
-        # MFCC
+        # Extract MFCC features
         mfcc = librosa.feature.mfcc(
             y=audio,
             sr=self.sr,
@@ -71,7 +103,7 @@ class FixedNoisyDataset(Dataset):
 
         mfcc = self.scaler.transform(mfcc)
 
-        # pad / crop
+        # Force all MFCC matrices to the same temporal length
         if mfcc.shape[0] < self.max_len:
             pad = np.zeros((self.max_len - mfcc.shape[0], mfcc.shape[1]))
             mfcc = np.vstack([mfcc, pad])
@@ -81,14 +113,12 @@ class FixedNoisyDataset(Dataset):
         x = torch.tensor(mfcc, dtype=torch.float32).unsqueeze(0)
         y = self.le.transform([label])[0]
 
-        # METADATA
+        # Retrieve SNR and noise information if available
         key = (fname, label)
 
         if key in self.meta_dict:
             snr, noise = self.meta_dict[key]
         else:
             snr, noise = None, None
-
-        # print("example:", key, snr, noise)
 
         return x, y, fname, snr, noise

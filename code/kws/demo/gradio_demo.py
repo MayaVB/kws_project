@@ -1,6 +1,22 @@
 import gradio as gr
 import pandas as pd
 
+"""
+gradio_demo.py
+
+Interactive Gradio demo for the project.
+
+The demo visualizes examples where speech enhancement
+improved keyword classification performance.
+
+Displayed information:
+- clean audio
+- noisy audio
+- enhanced audio
+- model predictions
+- SNR
+- noise type
+"""
 # =====================================================
 # LOAD DATA
 # =====================================================
@@ -13,7 +29,7 @@ CSV_PATH = (
 
 df = pd.read_csv(CSV_PATH)
 
-# כרגע מציגים רק דוגמאות שהשתפרו
+# show just the "fixed" examples where enhancement improved performance
 df = df[df["category"] == "fixed"].reset_index(drop=True)
 
 # =====================================================
@@ -125,7 +141,7 @@ with gr.Blocks(title="KWS Enhancement Demo") as demo:
         ]
     )
 
-    # טעינת הדוגמה הראשונה בעת פתיחת הדף
+    # טload the first example on startup
     demo.load(
         fn=load_example,
         inputs=example_dd,

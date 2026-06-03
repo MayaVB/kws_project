@@ -1,4 +1,13 @@
-# train.py
+"""
+train.py
+
+This module contains:
+- device selection
+- reproducibility utilities
+- model training
+- model loading
+- evaluation helpers
+"""
 import torch
 import torch.nn as nn
 import random
@@ -7,6 +16,7 @@ from pathlib import Path
 from typing import Union
 
 def get_device(device_cfg="auto"):
+    """Select the execution device."""
     if device_cfg == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     if device_cfg == "cuda":
@@ -17,7 +27,11 @@ def get_device(device_cfg="auto"):
 
 def set_seed(seed: int):
     """
-    Make runs more reproducible (not 100% guaranteed on GPU, but very helpful).
+    Set random seeds for reproducible experiments.
+
+    Note:
+    Results may still vary slightly across different
+    hardware and CUDA versions.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -35,10 +49,41 @@ def train_model(model, train_loader, val_loader,
                 model_name="model",
                 device="cpu", best_dir: Union[str, Path] = "runs/default/models",):
     """
-    Train a model and save the best weights based on validation accuracy.
-    train_loader/val_loader should return: (X, y, filename)
-    """
+    Train a classification model using mini-batch gradient descent.
 
+    The best checkpoint is selected according to
+    validation accuracy and saved automatically.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to train.
+    train_loader : DataLoader
+        Training dataset loader.
+    val_loader : DataLoader
+        Validation dataset loader.
+    num_epochs : int
+        Maximum number of epochs.
+    patience : int
+        Early stopping patience.
+    lr : float
+        Learning rate.
+    weight_decay : float
+        L2 regularization coefficient.
+    device : str
+        CPU or CUDA device.
+
+    Returns
+    -------
+    dict
+        Training history including:
+        - train_loss
+        - val_loss
+        - train_acc
+        - val_acc
+        - best_path
+        - best_val_acc
+    """
     best_dir = Path(best_dir)
     best_dir.mkdir(parents=True, exist_ok=True)
     best_path = best_dir / f"best_{model_name}.pt"
@@ -46,7 +91,7 @@ def train_model(model, train_loader, val_loader,
     if device is None:
         device = get_device()
     
-    # Loss Function, gets output and y_batch(real labels)
+    # Classification loss
     criterion = nn.CrossEntropyLoss()
     # Adam optimizer with L2 regularization (weight_decay)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -163,14 +208,16 @@ def train_model(model, train_loader, val_loader,
         "val_loss":   val_loss_hist,
         "train_acc":  train_acc_hist,
         "val_acc":    val_acc_hist,
-        "best_path":  best_path,
         "best_val_acc": best_val_acc,
         "best_path": str(best_path),
     }
     return history
 
 def load_model(model_class, num_classes, best_path, device=None):
-    """Create model, load state_dict, return in eval mode."""
+    """
+    Create a model instance and load pretrained weights.
+    Returns the model in evaluation mode.
+    """
     if device is None:
         device = get_device()
     model = model_class(num_classes).to(device)
@@ -181,11 +228,25 @@ def load_model(model_class, num_classes, best_path, device=None):
 
 def evaluate_loader(model, loader, device=None, return_meta=False):
     """
-    Return (loss, acc).
-    If return_meta=True also return:
-    true labels, predicted labels, filenames, snr, noise
-    """
+    Evaluate a model on a dataloader.
 
+    Parameters
+    ----------
+    return_meta : bool
+        If True, also return:
+        - true labels
+        - predicted labels
+        - filenames
+        - SNR values
+        - noise types
+
+    Returns
+    -------
+    (loss, acc)
+    or
+    (loss, acc, true_labels, pred_labels,
+    filenames, snr_values, noise_names)
+"""
     if device is None:
         device = get_device()
 
@@ -225,7 +286,7 @@ def evaluate_loader(model, loader, device=None, return_meta=False):
                 all_files.extend(filenames)
 
                 if len(batch) >= 5:
-
+                    # TODO: Simplify metadata extraction logic
                     if isinstance(batch[3], (float, int, np.floating)) or torch.is_tensor(batch[3]):
                         # (x, y, f, snr, noise)
                         snr_db = batch[3]

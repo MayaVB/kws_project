@@ -1,6 +1,15 @@
-# enhanced_dataset.py
+"""
+enhanced_dataset.py
+
+Dataset wrapper for enhanced speech evaluation.
+
+This dataset loads enhanced audio files,
+extracts MFCC features, applies normalization,
+and returns tensors compatible with the DS-CNN model.
+
+Optional SNR and noise metadata can also be returned.
+"""
 import os
-import random
 import numpy as np
 import librosa
 import torch
@@ -8,6 +17,19 @@ from torch.utils.data import Dataset
 import pandas as pd
 
 class EnhancedTestDataset(Dataset):
+    """
+    Dataset for evaluating keyword classification
+    on enhanced speech signals.
+
+    Each sample returns:
+
+    - MFCC tensor
+    - encoded label
+    - filename
+    - optional SNR metadata
+    - optional noise metadata
+    - raw audio signal
+    """
     def __init__(
         self,
         labels_list,
@@ -45,6 +67,19 @@ class EnhancedTestDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
+        """
+    Load one enhanced audio sample and prepare it for inference.
+    Returns
+    -------
+    (
+        X_tensor,
+        y_tensor,
+        filename,
+        snr_db,
+        noise_name,
+        signal_tensor
+    )
+    """
         label = self.labels[idx]
         fname = self.filenames[idx]
 
@@ -53,11 +88,11 @@ class EnhancedTestDataset(Dataset):
         sig, _ = librosa.load(path, sr=self.sr)
         sig = librosa.util.fix_length(sig, size=self.sr)
 
-        # MFCC
+        # Extract and normalize MFCC features
         mfcc = librosa.feature.mfcc(y=sig, sr=self.sr, n_mfcc=self.n_mfcc).T
         mfcc_sc = self.scaler.transform(mfcc).astype(np.float32)
 
-        # pad
+        # Pad MFCC matrix to a fixed temporal length
         T, F = mfcc_sc.shape
         Xp = np.zeros((self.max_len, F), dtype=np.float32)
         Xp[:min(T, self.max_len)] = mfcc_sc[:self.max_len]
@@ -65,9 +100,8 @@ class EnhancedTestDataset(Dataset):
         X_tensor = torch.from_numpy(Xp).unsqueeze(0)
         y_tensor = torch.tensor(self.y_enc[idx]).long()
 
-        # metadata
+        # Retrieve optional SNR/noise information
         key = (label, fname)
-        # print("example meta key:", list(self.meta_dict.keys())[0])
         
         snr_db = None
         noise_name = None

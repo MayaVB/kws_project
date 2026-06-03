@@ -6,7 +6,6 @@ import torch
 import os
 from torch.utils.data import Dataset
 
-from kws.denoiser.stft_mask.denoise import denoise_signal
 
 class DenoisedDataset(Dataset):
     def __init__(self, base_dataset, sampling_rate, n_mfcc, scaler, max_len, root):

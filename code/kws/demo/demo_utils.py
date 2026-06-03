@@ -1,4 +1,17 @@
-# demo_utils.py
+"""
+demo_utils.py
+
+Utilities for preparing demo and Gradio analysis files.
+
+This module compares prediction results across
+multiple evaluation modes and generates:
+
+- fixed examples
+- degraded examples
+- still-wrong examples
+- demo CSV files
+- audio path mappings
+"""
 import pandas as pd
 import os
 
@@ -9,8 +22,18 @@ def compare_prediction_modes(
     output_dir
 ):
     """
-    Compare clean/noisy/enhanced predictions and
-    save useful analysis files for Gradio.
+    demo_utils.py
+
+    Utilities for preparing demo and Gradio analysis files.
+
+    This module compares prediction results across
+    multiple evaluation modes and generates:
+
+    - fixed examples
+    - degraded examples
+    - still-wrong examples
+    - demo CSV files
+    - audio path mappings
     """
 
     print("\n[COMPARE MODES] Loading CSVs...")
@@ -106,7 +129,7 @@ def compare_prediction_modes(
     # ---------------------------------
     # save csv
     # ---------------------------------
-
+    """
     fixed.to_csv(
         os.path.join(
             output_dir,
@@ -142,6 +165,7 @@ def compare_prediction_modes(
         ),
         index=False
     )
+    """
 
     interesting = pd.concat([
         fixed.assign(category="fixed"),
@@ -180,7 +204,7 @@ def compare_prediction_modes(
     # ---------------------------------
     # summary txt
     # ---------------------------------
-
+    """
     summary_path = os.path.join(
         output_dir,
         "enhancement_analysis.txt"
@@ -223,6 +247,7 @@ def compare_prediction_modes(
     print(
         f"Degraded   : {len(degraded)}"
     )
+    """
 
 def build_audio_paths(
     filename,

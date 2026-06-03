@@ -1,4 +1,18 @@
-# build_enhanced_dataset.py
+"""
+build_enhanced_dataset.py
+
+Generate an enhanced speech dataset using
+a pretrained SGMSE model.
+
+Pipeline:
+1. Load noisy speech files
+2. Run SGMSE enhancement
+3. Save enhanced files
+4. Generate synchronized metadata CSV
+
+This script is intended for dataset generation
+and is not part of the training/evaluation pipeline.
+"""
 import os
 import subprocess
 import pandas as pd
@@ -9,11 +23,6 @@ import shutil
 
 # ================= CONFIG ================= #
 
-MODE = "trained_ep149_ft"
-# "pretrained"
-# "trained_ep10"
-# "trained_ep20"
-
 BASE_DIR = "/home/dsi/skopavi/Project/kws_project"
 CHUNK_SIZE = 10
 N_WORKERS = 1
@@ -22,30 +31,25 @@ TMP_ROOT = "/tmp/enhanced_chunks"
 INPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
 
 META_IN = "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
-META_OUT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_{MODE}_new_metadata.csv"
 
 # ================= MODE SWITCH ================= #
 
-if MODE == "pretrained":
-    CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt"
-    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
+# pretrained
+CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt"
+OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
 
-elif MODE == "trained_ep149_ft":
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/t8xf51rt/epoch=99-last.ckpt"
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/j042jm5h/epoch=163-last.ckpt"
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epochepoch=149.ckpt"
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=166-si_sir=46.72.ckpt"
-    CKPT_PATH ="/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/zd9dcd3i-kws_exp_10_fine_lr1e5/epochepoch=149.ckpt"
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt"
-    OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep149_ft"
+# trained
+MODE = "trained_ep149_ft"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/t8xf51rt/epoch=99-last.ckpt"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/j042jm5h/epoch=163-last.ckpt"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epochepoch=149.ckpt"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=166-si_sir=46.72.ckpt"
+CKPT_PATH ="/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/zd9dcd3i-kws_exp_10_fine_lr1e5/epochepoch=149.ckpt"
+# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt"
 
-# elif MODE == "trained_ep20":
-    # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/ph9fp8m3/epoch=19-last.ckpt"
-    # OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced/trained_ep20"
-
-else:
-    raise ValueError(f"Unknown MODE: {MODE}")
+OUTPUT_ROOT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_new/{MODE}"
+META_OUT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_{MODE}_new_metadata.csv"
 
 # ========================================= #
 

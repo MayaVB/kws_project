@@ -1,7 +1,13 @@
-# analysis_utils.py
+"""
+analysis_utils.py
+
+This module contains:
+- mode-specific analysis
+- prediction report generation
+- metrics aggregation and comparison
+"""
 from tabulate import tabulate
 import pandas as pd
-import os
 
 from metrics import misclassified_between_two_classes, run_calc_metrics
 from visualization import plot_confusion_per_snr, plot_confusion_per_noise
@@ -20,9 +26,20 @@ def analyze_mode(
     enhanced_root=None,
 ):
     """
-    Run full analysis for one mode
-    """
+    Run post-processing analysis for a single evaluation mode.
 
+    The analysis includes:
+
+    - confusion matrices by SNR
+    - confusion matrices by noise type
+    - misclassification reports
+    - optional speech enhancement metrics
+
+    Returns
+    -------
+    dict
+        Summary metrics for the current mode.
+    """
     t = results["t"]
     p = results["p"]
     f = results["f"]
@@ -111,6 +128,19 @@ def save_prediction_reports(
     snr=None,
     noise=None
 ):
+    """
+    Save prediction results and misclassification reports.
+
+    Two CSV files are generated:
+
+    - all predictions
+    - misclassified samples only
+
+    Returns
+    -------
+    pred_df : DataFrame
+    mis_df : DataFrame
+    """
     pred_df = pd.DataFrame({
         "filename": f,
         "true_idx": t,
@@ -169,6 +199,12 @@ def save_metrics_summary(
     all_metrics,
     run_dir
 ):
+    """
+    Create and save a summary table comparing all evaluation modes.
+
+    The summary is written to:
+    metrics_comparison.txt
+    """
     if len(all_metrics) == 0:
         return
 

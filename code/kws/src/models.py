@@ -1,14 +1,37 @@
-# models.py
+"""
+models.py
+
+Currently implemented:
+- DS-CNN (Depthwise Separable Convolutional Neural Network)
+
+The network operates on MFCC feature maps and
+performs keyword classification.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class DSCNN(nn.Module):
+    """
+    Depthwise Separable Convolutional Neural Network for Keyword Spotting tasks using MFCC inputs.
+    
+    Architecture:
+    - Initial convolution block
+    - Two depthwise-separable convolution blocks
+    - Global Average Pooling
+    - Fully connected classifier
+
+    Input shape:
+        (B, 1, T, F)
+
+    Output shape:
+        (B, num_classes)
+    """
     def __init__(self, num_classes: int):
         super().__init__()
 
-        # Initial conv + batch norm (same as Basic)s
+        # Initial feature extraction layer
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1   = nn.BatchNorm2d(64)
 
@@ -41,6 +64,20 @@ class DSCNN(nn.Module):
         self.fc_out  = nn.Linear(128, num_classes)
 
     def forward(self, x):
+        """
+        Forward pass.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input MFCC tensor of shape:
+            (batch_size, 1, time_frames, n_mfcc)
+
+        Returns
+        -------
+        torch.Tensor
+            Class logits.
+        """
         # Input: (B, 1, T, F)
         # print("in", x.shape)
         x = F.relu(self.bn1(self.conv1(x)))

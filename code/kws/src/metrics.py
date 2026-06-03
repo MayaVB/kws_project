@@ -1,4 +1,13 @@
-# metrics.py
+"""
+metrics.py
+
+This module contains:
+- confusion matrix generation
+- classification reports
+- misclassification analysis
+- stratified dataset splitting helpers
+- speech enhancement metric evaluation
+"""
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,15 +21,27 @@ import os
 import shutil
 import subprocess
 import soundfile as sf
-import sys
 import time
 
 
 def confusion_and_report(model, loader, class_names, device, model_name="",
                         return_meta=False, save_path=None, save_txt_path=None):
     """
-    Build confusion matrix + classification report from a loader that returns (X,y,filename).
-    Returns: cm, report_text, (all_true, all_pred, all_filenames)
+    Generate a confusion matrix and classification report.
+
+    Parameters
+    ----------
+    model : nn.Module
+    loader : DataLoader
+    class_names : list[str]
+    device : str
+
+    Returns
+    -------
+    cm : np.ndarray
+    report : str
+    meta : tuple
+        (true_labels, predicted_labels, filenames)
     """
     model.eval()
     all_true, all_pred, all_files = [], [], []
@@ -79,14 +100,20 @@ def confusion_and_report(model, loader, class_names, device, model_name="",
 
 
 def pick_random_class_pair(class_names, seed=123):
+    """
+    Select two random class names for error analysis.
+    """
     rng = random.Random(seed)
     a, b = rng.sample(list(class_names), 2)
     return a, b
 
 def misclassified_between_two_classes(t, p, f, class_names, class_a, class_b, snr=None, noise=None, max_rows=50):
     """
-    Show misclassifications A->B.
-    t,p are integer class indices, f filenames.
+    Extract samples that were misclassified from
+    class_a into class_b.
+
+    Optional SNR and noise metadata are included
+    when available.
     """
     name_to_idx = {name: i for i, name in enumerate(class_names)}
     ia = name_to_idx[class_a]
@@ -161,10 +188,29 @@ def make_split_indices(labels: np.ndarray,
 
 
 def subset_by_idx(arr, idx):
+    """
+    Return a subset of an array using the provided indices.
+    """
     return np.array(arr, dtype=object)[idx]
 
 
 def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
+    """
+    Run objective speech enhancement metrics.
+
+    The function builds temporary clean/noisy/enhanced
+    datasets, invokes the SGMSE metrics script and
+    extracts:
+
+    - PESQ
+    - ESTOI
+    - SI-SDR
+    - SI-SIR
+    - SI-SAR
+
+    Results are appended to metrics.txt and returned
+    as a dictionary.
+    """
 
     TMP_ROOT = os.path.join(
     "/home/dsi/skopavi/Project/kws_project/tmp",
@@ -187,11 +233,6 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
     os.makedirs(noisy_dir)
     os.makedirs(enhanced_tmp_dir)
 
-    # DEBUG STORAGE
-    missing_noisy = []
-    missing_enhanced = []
-    used_files = []
-
     # MAIN LOOP
     print("[METRICS] Building dataset for metrics...")
 
@@ -206,15 +247,6 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
         has_noisy = os.path.exists(noisy_src)
         has_enhanced = os.path.exists(enhanced_src)
 
-        # DEBUG TRACKING
-        if not has_noisy:
-            missing_noisy.append((label, fname))
-            continue
-
-        if not has_enhanced:
-            missing_enhanced.append((label, fname))
-            continue
-
         # COPY ONLY VALID FILES
         safe_name = f"{label}__{fname}"
 
@@ -226,49 +258,14 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
         shutil.copy2(noisy_src, noisy_dst)
         shutil.copy2(enhanced_src, enhanced_dst)
 
-        used_files.append((label, fname))
-
-    """
-    # DEBUG PRINTS
-    print("====================================")
-    print("[DEBUG SUMMARY]")
-    print("====================================")
-
-    print(f"Total df_test_audio: {len(df_test_audio)}")
-    print(f"Used for metrics (intersection): {len(used_files)}")
-    print(f"Missing NOISY: {len(missing_noisy)}")
-    print(f"Missing ENHANCED: {len(missing_enhanced)}")
-
-    MAX_PRINT = 10
-
-    if missing_noisy:
-        print("\n[DEBUG] Missing in NOISY:")
-        for label, fname in missing_noisy[:MAX_PRINT]:
-            print(f"  NOISY MISSING → {label}/{fname}")
-
-    if missing_enhanced:
-        print("\n[DEBUG] Missing in ENHANCED:")
-        for label, fname in missing_enhanced[:MAX_PRINT]:
-            print(f"  ENHANCED MISSING → {label}/{fname}")
-
-    # =========================
-    # FINAL COUNTS (CRITICAL)
-    # =========================
-    print("\n[FINAL COUNTS]")
-    print("clean:", len(os.listdir(clean_dir)))
-    print("noisy:", len(os.listdir(noisy_dir)))
-    print("enhanced:", len(os.listdir(enhanced_tmp_dir)))
-
-    # sanity check
-    assert len(os.listdir(clean_dir)) == len(os.listdir(noisy_dir)) == len(os.listdir(enhanced_tmp_dir)), \
-        "❌ Mismatch between clean/noisy/enhanced!"
-
-    """
-
     # RUN METRICS
     print("[METRICS] Running calc_metrics...")
 
     metrics_out_path = run_dir / "metrics.txt"
+
+    # TODO:
+    # Replace shell command with a direct Python call
+    # if calc_metrics.py is converted into a reusable module.
 
     cmd = f"""
     python /home/dsi/skopavi/Project/kws_project/code/sgmse/calc_metrics.py \

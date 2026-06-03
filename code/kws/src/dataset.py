@@ -1,4 +1,14 @@
-# dataset.py
+"""
+dataset.py
+
+This module contains:
+- audio file discovery
+- audio loading and preprocessing
+- train/validation/test splitting
+- MFCC padding
+- label encoding
+- PyTorch Dataset and DataLoader creation
+"""
 import os
 import numpy as np
 import pandas as pd
@@ -12,14 +22,33 @@ from torch.utils.data import Dataset, DataLoader
 
 
 def list_folders(main_dir: str):
-    """Return directory names under main_dir."""
+    """
+    Return all keyword folders under the dataset root.
+
+    The background noise folder is excluded automatically.
+    Returned folder names are sorted alphabetically.
+    """
     folders = [f for f in os.listdir(main_dir) if os.path.isdir(os.path.join(main_dir, f))]
     folders = [f for f in folders if f != "_background_noise_"]
     folders = sorted(folders)  
     return folders
 
 def collect_wav_paths(main_dir: str, subset_folders):
-    """Collect full paths to .wav files from the selected folders."""
+    """
+    Collect full paths to WAV files from the selected folders.
+
+    Parameters
+    ----------
+    main_dir : str
+        Dataset root directory.
+    subset_folders : list[str]
+        Folder names to scan.
+
+    Returns
+    -------
+    list[str]
+        Full paths to all discovered WAV files.
+    """
     file_paths = []
     for folder in subset_folders:
         folder_dir = os.path.join(main_dir, folder)
@@ -38,7 +67,7 @@ def load_audio_file(file_path: str, sampling_rate: int = 16000):
     # - full path
     """
     audio, sr = librosa.load(file_path, sr=sampling_rate)
-    audio = fix_audio_length(audio, sampling_rate)  # ensure 1 second length
+    audio = fix_audio_length(audio, sampling_rate)  # Force all samples to exactly 1 second
     label = os.path.basename(os.path.dirname(file_path))
     filename = os.path.basename(file_path)
     return filename, label, audio
@@ -120,7 +149,10 @@ def pad_mfcc_list(mfcc_list, max_len=None):
     # If no length provided, use the longest sequence
     n_samples = len(mfcc_list) 
     n_features = mfcc_list[0].shape[1]
+
+    # Create a fixed-size tensor so all samples can be batched together
     X_padded = np.zeros((n_samples, max_len, n_features), dtype=np.float32)
+
     # Copy each MFCC matrix into padded container
     for i, m in enumerate(mfcc_list):
         length = m.shape[0]
@@ -239,7 +271,11 @@ def make_test_loader(
 
 def build_paths(df, root_dir):
     """
-    Build absolute audio file paths from metadata dataframe.
+    Build absolute audio paths from a metadata dataframe.
+
+    Expected dataframe columns:
+    - label
+    - filename
     """
     return [
         os.path.join(root_dir, row["label"], row["filename"])

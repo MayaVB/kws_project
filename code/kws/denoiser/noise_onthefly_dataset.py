@@ -11,8 +11,8 @@ import torch
 from torch.utils.data import Dataset
 from typing import List, Sequence, Dict
 import random
-from kws.denoiser.stft_mask.denoise import denoise_signal
-from kws.denoiser.stft_mask.unet_model import UNetDenoiser
+from denoise import denoise_signal
+from unet_model import UNetDenoiser
 
 def _rms(x: np.ndarray, eps: float = 1e-12) -> float:
     return float(np.sqrt(np.mean(x**2) + eps))

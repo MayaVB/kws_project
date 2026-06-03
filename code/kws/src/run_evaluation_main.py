@@ -26,66 +26,43 @@ sys.path.append(
 
 import time
 import joblib
-import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
-from tabulate import tabulate
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
+from dataset import build_paths
 
 # PROJECT IMPORTS
 from config import load_config
 from models import DSCNN
-from dataset import (
-    build_audio_dataframe,
-    make_test_loader,
-    pad_mfcc_list
-)
-from features import (
-    add_mfcc_column,
-    apply_scaler,
-)
-from train import (
-    get_device,
-    load_model,
-    evaluate_loader
-)
-from metrics import (
-    confusion_and_report,
-    pick_random_class_pair
-)
-from visualization import (
-    plot_example_signals
-)
-from analysis_utils import (
-    analyze_mode
-)
-from new_noise_dataset import (
-    FixedNoisyDataset
-)
-from enhanced_dataset import (
-    EnhancedTestDataset
-)
-
+from dataset import build_audio_dataframe, make_test_loader, pad_mfcc_list
+from features import add_mfcc_column, apply_scaler
+from train import get_device, load_model, evaluate_loader
+from metrics import confusion_and_report, pick_random_class_pair
+from visualization import plot_example_signals, plot_confusion_comparison
+from analysis_utils import analyze_mode, save_metrics_summary
+from new_noise_dataset import FixedNoisyDataset
+from enhanced_dataset import EnhancedTestDataset
 
 # MAIN
 def run(cfg: dict):
 
     total_start = time.time()
-    # CONFIG
+    # =====================================
+    # LOAD CONFIGURATION
+    # =====================================
     device = get_device(cfg["device"])
     sampling_rate = int(cfg["sampling_rate"])
     n_mfcc = int(cfg["n_mfcc"])
     batch_size = int(cfg["batch_size"])
     use_parallel = bool(cfg["use_parallel"])
-    folder_start = int(cfg["folder_start"])
-    folder_end = int(cfg["folder_end"])
+    # folder_start = int(cfg["folder_start"])
+    # folder_end = int(cfg["folder_end"])
 
-    # PATHS
+    # =====================================
+    # LOAD PATHS
+    # =====================================
     output_dir = Path(cfg["output_dir"])
     meta_path = str(cfg["meta"])
     clean_root = str(cfg["clean_dir"])
@@ -96,7 +73,9 @@ def run(cfg: dict):
     scaler_path = str(cfg["scaler_path"])
     label_encoder_path = str(cfg["label_encoder_path"])
 
-    # RUN DIR
+    # =====================================
+    # CREATE OUTPUT DIRECTORIES
+    # =====================================
     run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_dir = output_dir / run_stamp
     plots_dir = run_dir / "plots"
@@ -106,40 +85,40 @@ def run(cfg: dict):
     print("Using device:", device)
     print("Run dir:", run_dir)
 
-    # LOAD SAVED OBJECTS
+    # =====================================
+    # LOAD SAVED ARTIFACTS
+    # =====================================
     scaler = joblib.load(scaler_path)
     label_encoder = joblib.load(label_encoder_path)
     all_class_names = label_encoder.classes_
     print("\nALL MODEL CLASSES:")
     print(all_class_names)
 
-    # LOAD METADATA
+    # =====================================
+    # LOAD DATASET METADATA
+    # =====================================
     meta_df = pd.read_csv(meta_path)
 
     # SELECTED FOLDERS
     all_folders = sorted(meta_df["label"].unique())
-
-    selected_folders = all_folders[folder_start:folder_end]
-
+    # selected_folders = all_folders[folder_start:folder_end]
     print("\nSELECTED FOLDERS:")
-    print(selected_folders)
+    print(all_folders)
 
     # TEST META ONLY
     df_test_meta = meta_df[meta_df["split"] == "test"].reset_index(drop=True)
 
     # FILTER TO SELECTED FOLDERS
-    df_test_meta = df_test_meta[df_test_meta["label"].isin(selected_folders)].reset_index(drop=True)
+    df_test_meta = df_test_meta[df_test_meta["label"].isin(all_folders)].reset_index(drop=True)
     print(f"\nTEST FILES: {len(df_test_meta)}")
 
-    # BUILD CLEAN PATHS
-    test_paths = [
-        os.path.join(
-            clean_root,
-            row["label"],
-            row["filename"]
-        )
-        for _, row in df_test_meta.iterrows()
-    ]
+    # =====================================
+    # BUILD TEST DATASET
+    # =====================================
+    test_paths = build_paths(
+        df_test_meta,
+        clean_root
+    )
 
     # BUILD AUDIO
     df_test_audio = build_audio_dataframe(
@@ -148,7 +127,9 @@ def run(cfg: dict):
         use_parallel
     )
 
-    # MFCC
+    # =====================================
+    # MFCC EXTRACTION AND NORMALIZATION
+    # =====================================
     df_test = add_mfcc_column(
         df_test_audio,
         sr=sampling_rate,
@@ -173,8 +154,9 @@ def run(cfg: dict):
     # FILENAMES
     fn_test = df_test["filename"].values
 
-
-    # CLEAN DATASET
+    # =====================================
+    # CREATE TEST DATALOADER
+    # =====================================
     test_loader_clean = make_test_loader(
         X_test,
         y_test_enc,
@@ -183,7 +165,9 @@ def run(cfg: dict):
         num_workers=int(cfg["num_workers"])
     )
 
-    # LOAD MODEL
+    # =====================================
+    # LOAD PRETRAINED MODEL
+    # =====================================
     best_model = load_model(
         DSCNN,
         len(all_class_names),   
@@ -193,15 +177,15 @@ def run(cfg: dict):
 
     print("\nMODEL LOADED SUCCESSFULLY")
 
-
     # PARAMS
     total_params = sum(p.numel() for p in best_model.parameters())
-
     print("\n===================================")
     print(f"Total params: {total_params:,}")
     print("===================================\n")
 
-    # TEST MODES
+    # =====================================
+    # DEFINE EVALUATION MODES
+    # =====================================
     modes_config = {
 
         "clean": {
@@ -227,9 +211,12 @@ def run(cfg: dict):
         }
     }
 
+    # =====================================
+    # PREPARE ANALYSIS
+    # =====================================
     # RANDOM CLASS PAIR
     a, b = pick_random_class_pair(
-        selected_folders,
+        all_folders,
         seed=int(cfg.get("mis_seed", 123))
     )
 
@@ -242,7 +229,9 @@ def run(cfg: dict):
     results = {}
     all_metrics = []
 
-    # LOOP OVER MODES
+    # =====================================
+    # EVALUATE ALL MODES
+    # =====================================
     for mode_name, mode_cfg in modes_config.items():
         print(f"\n=== {mode_name.upper()} ===")
         mode_type = mode_cfg["type"]
@@ -298,7 +287,6 @@ def run(cfg: dict):
             device=device,
             return_meta=True
         )
-
         
         eval_time = time.time() - eval_start
         print(
@@ -328,11 +316,10 @@ def run(cfg: dict):
         )
 
         # CONFUSION MATRIX
-        # SUBSET REPORT - ONLY SELECTED FOLDERS
         confusion_and_report(
             best_model,
             loader,
-            selected_folders,
+            all_folders,
             device=device,
             model_name=mode_name,
             save_txt_path=run_dir / "reports.txt"
@@ -343,7 +330,7 @@ def run(cfg: dict):
             acc,
             mode=mode_name,
             results=results[mode_name],
-            class_names=selected_folders,
+            class_names=all_folders,
             plots_dir=plots_dir,
             run_dir=run_dir,
             a=a,
@@ -360,7 +347,9 @@ def run(cfg: dict):
         if metrics_dict is not None:
             all_metrics.append(metrics_dict)
 
-    # EXAMPLE SIGNALS
+    # =====================================
+    # GENERATE EXAMPLE VISUALIZATIONS
+    # =====================================
     enhanced_versions = {}
     for mode_name, mode_cfg in modes_config.items():
         if mode_cfg["type"] == "enhanced":
@@ -375,108 +364,32 @@ def run(cfg: dict):
         idx_vis=0
     )
 
-    # CONFUSION MATRICES COMPARISON
+    # =====================================
+    # CONFUSION MATRIX COMPARISON
+    # =====================================
     print("\n=== CONFUSION MATRICES COMPARISON ===")
-
-    confusion_modes = [
-        "clean",
-        "noisy",
-        "enh_trained"
-    ]
-
-    DISPLAY_NAMES = {
-        "clean": "Clean",
-        "noisy": "Noisy",
-        "enh_baseline": "Enhanced Baseline",
-        "enh_trained": "Enhanced Trained"
-    }
-
-    pairs = []
-    for mode_name in confusion_modes:
-        if mode_name not in results:
-            continue
-
-        mode_res = results[mode_name]
-        pairs.append(
-            (
-                mode_name,
-                mode_res["t"],
-                mode_res["p"]
-            )
-        )
-
-    # 3 COLUMNS, 1 ROW
-    
-    fig, axes = plt.subplots(
-        1,
-        len(pairs),
-        figsize=(7 * len(pairs), 6)
-    )
-    """
-    # 3 ROWS, 1 COLUMN
-    fig, axes = plt.subplots(
-    len(pairs),
-    1,
-    figsize=(35, 5 * len(pairs))
-    )
-    """
-
-    if len(pairs) == 1:
-        axes = [axes]
-
-    for i, (name, t, p) in enumerate(pairs):
-        # cm = confusion_matrix(t, p)
-        # subset_labels = sorted(np.unique(t))
-        # cm_full = confusion_matrix(t, p, labels=np.arange(len(all_class_names)))
-        # cm = cm_full[subset_labels, :]
-        cm = confusion_matrix(t, p)
-        display_name = DISPLAY_NAMES.get(name, name)
-        sns.heatmap(
-            cm,
-            ax=axes[i],
-            annot=False,
-            fmt="d",
-            cmap="Blues",
-            # xticklabels=selected_folders,
-            xticklabels=all_class_names,
-            yticklabels=selected_folders
-        )
-
-        axes[i].set_title(
-            display_name,
-            fontsize=14,
-            fontweight="bold"
-        )
-
-        axes[i].set_xlabel("Predicted")
-        axes[i].set_ylabel("True")
-
-    plt.tight_layout()
-    plt.savefig(
-        plots_dir / "confusion_matrices_comparison.png",
-        bbox_inches="tight"
+    plot_confusion_comparison(
+        results=results,
+        class_names=all_class_names,
+        plots_dir=plots_dir,
+        confusion_modes=[
+            "clean",
+            "noisy",
+            "enh_trained"
+        ]
     )
 
-    plt.close()
+    # =====================================
+    # SAVE FINAL METRICS SUMMARY
+    # =====================================
+    save_metrics_summary(
+        all_metrics,
+        run_dir
+    )
 
-    # METRICS TABLE
-    if len(all_metrics) > 0:
-        df_metrics = pd.DataFrame(all_metrics)
-        df_metrics = df_metrics.fillna("-")
-        print("\n=== METRICS TABLE ===")
-        print(df_metrics)
-        table_str = tabulate(
-            df_metrics,
-            headers="keys",
-            tablefmt="fancy_grid",
-            showindex=False
-        )
-        print(table_str)
-        with open(run_dir / "metrics_comparison.txt", "w") as f:
-            f.write(table_str)
-
-
-    # TOTAL TIME
+    # =====================================
+    # FINAL RUNTIME REPORT
+    # =====================================
     total_time = time.time() - total_start
     print("\n===================================")
     print(
