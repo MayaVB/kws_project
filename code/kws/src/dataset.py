@@ -236,3 +236,12 @@ def make_test_loader(
     )
 
     return test_loader
+
+def build_paths(df, root_dir):
+    """
+    Build absolute audio file paths from metadata dataframe.
+    """
+    return [
+        os.path.join(root_dir, row["label"], row["filename"])
+        for _, row in df.iterrows()
+    ]

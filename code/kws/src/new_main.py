@@ -22,18 +22,18 @@ import torch
 from torch.utils.data import DataLoader
 
 from new_noise_dataset import FixedNoisyDataset
-from new_denoised_dataset import DenoisedDataset
 from enhanced_dataset import EnhancedTestDataset
 
-from dataset import build_audio_dataframe
-from metrics import  confusion_and_report, pick_random_class_pair, plot_history
+from dataset import build_audio_dataframe, build_paths
+from metrics import  confusion_and_report, pick_random_class_pair
 from models import DSCNN
-from visualization import plot_example_signals
+from visualization import plot_example_signals, plot_history, plot_confusion_comparison
 from config import load_config
 from train import get_device, load_model, train_model, evaluate_loader
 from dataset import list_folders, collect_wav_paths, make_label_encoder, make_loaders, pad_mfcc_list
 from features import add_mfcc_column, apply_scaler, fit_scaler
-from analysis_utils import analyze_mode, compare_prediction_modes
+from analysis_utils import analyze_mode, save_prediction_reports, save_metrics_summary
+from demo_utils import compare_prediction_modes
 
 def run(cfg: dict):
     total_start = time.time()
@@ -74,7 +74,13 @@ def run(cfg: dict):
 
     # SELECT FOLDERS
     all_folders = sorted(meta_df["label"].unique())
-    selected_folders = all_folders[folder_start:folder_end]
+    if "selected_folders" in cfg and cfg["selected_folders"]:
+        selected_folders = cfg["selected_folders"]
+    else:
+        selected_folders = all_folders[
+            int(cfg["folder_start"]):
+            int(cfg["folder_end"])
+        ]
     print("Selected folders:", selected_folders)
 
     df_train_meta = meta_df[meta_df["split"] == "train"].reset_index(drop=True)
@@ -89,15 +95,9 @@ def run(cfg: dict):
     print(f"\nSPLIT: train={len(df_train_meta)}, val={len(df_val_meta)}, test={len(df_test_meta)}")
 
     # BUILD CLEAN AUDIO
-    def build_paths(df):
-        return [
-            os.path.join(clean_root, row["label"], row["filename"])
-            for _, row in df.iterrows()
-        ]
-
-    train_paths = build_paths(df_train_meta)
-    val_paths   = build_paths(df_val_meta)
-    test_paths  = build_paths(df_test_meta)
+    train_paths = build_paths(df_train_meta, clean_root)
+    val_paths   = build_paths(df_val_meta, clean_root)
+    test_paths  = build_paths(df_test_meta, clean_root)
 
     df_train_audio = build_audio_dataframe(train_paths, sampling_rate, use_parallel)
     df_val_audio   = build_audio_dataframe(val_paths, sampling_rate, use_parallel)
@@ -280,65 +280,17 @@ def run(cfg: dict):
             best_model, loader, device=device, return_meta=True
         )
 
-        # =====================================
         # SAVE MISCLASSIFICATIONS FOR GRADIO
-        # =====================================
-
-        pred_df = pd.DataFrame({
-            "filename": f,
-            "true_idx": t,
-            "pred_idx": p
-        })
-
-        pred_df["true_label"] = label_encoder.inverse_transform(
-            pred_df["true_idx"]
+        pred_df, mis_df = save_prediction_reports(
+            t=t,
+            p=p,
+            f=f,
+            mode_name=mode_name,
+            label_encoder=label_encoder,
+            run_dir=run_dir,
+            snr=snr,
+            noise=noise
         )
-
-        pred_df["pred_label"] = label_encoder.inverse_transform(
-            pred_df["pred_idx"]
-        )
-
-        pred_df["correct"] = (
-            pred_df["true_label"]
-            ==
-            pred_df["pred_label"]
-        )
-
-        pred_df["mode"] = mode_name
-
-        # add metadata if available
-        if snr is not None and len(snr) == len(pred_df):
-            pred_df["snr"] = snr
-
-        if noise is not None and len(noise) == len(pred_df):
-            pred_df["noise"] = noise
-
-        # keep only mistakes
-        mis_df = pred_df[
-            pred_df["correct"] == False
-        ].copy()
-
-        # sort nicely
-        mis_df = mis_df.sort_values(
-            ["true_label", "pred_label", "filename"]
-        )
-
-        mis_df.to_csv(
-            run_dir / f"{mode_name}_misclassified.csv",
-            index=False
-        )
-
-        pred_df.to_csv(
-            run_dir / f"{mode_name}_all_predictions.csv",
-            index=False
-        )
-
-        print(
-            f"Saved {len(mis_df)} misclassified samples "
-            f"for {mode_name}"
-        )
-                
-        # ##################################
 
         eval_time = time.time() - eval_start
 
@@ -421,107 +373,21 @@ def run(cfg: dict):
 
     # CONFUSION MATRICES
     print("\n=== CONFUSION MATRICES COMPARISON ===")
-
-    confusion_modes = ["clean", "noisy", "enh_trained"]
-    DISPLAY_NAMES = {
-        "clean": "Clean",
-        "noisy": "Noisy",
-        "enh_baseline": "Enhanced Baseline",
-        "enh_trained": "Enhanced Trained"}
-    
-    pairs = []
-
-    for mode_name in confusion_modes:
-        if mode_name not in results:
-            print(f"WARNING: {mode_name} not found in results")
-            continue
-        mode_res = results[mode_name]
-        pairs.append((mode_name, mode_res["t"], mode_res["p"]))
-
-    n_modes = len(pairs)
-    ncols = 3
-    nrows = 1
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(7*ncols, 6))
-    axes = np.array(axes).reshape(-1)
-
-    print("DEBUG: starting confusion matrices block")
-
-    for i, (name, t, p) in enumerate(pairs):
-        print(f"DEBUG: {name} len={len(t)}")
-        cm = confusion_matrix(t, p)
-        display_name = DISPLAY_NAMES.get(name, name)
-        sns.heatmap(
-            cm,          
-            ax=axes[i],
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-            xticklabels=class_names,
-            yticklabels=class_names
-        )
-        axes[i].set_title(display_name, fontsize=14, fontweight="bold")
-        axes[i].set_xlabel("Predicted", fontsize=12)
-        axes[i].set_ylabel("True", fontsize=12)
-
-        # axes[i].tick_params(axis='x', rotation=45)
-        # axes[i].tick_params(axis='y', rotation=0)
-
-        single_fig, single_ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(
-            cm,
-            ax=single_ax,
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-            xticklabels=class_names,
-            yticklabels=class_names
-        )
-        single_ax.set_title(display_name, fontsize=14, fontweight="bold")
-        single_ax.set_xlabel("Predicted", fontsize=13)
-
-        single_ax.set_ylabel("True", fontsize=13)
-        # single_ax.tick_params(axis='x', rotation=45)
-        # single_ax.tick_params(axis='y', rotation=0)
-        plt.tight_layout()
-        plt.savefig(
-            plots_dir / f"confusion_{name}.png"
-        )
-        plt.close(single_fig)
-
-    # hide empty axes
-    for j in range(len(pairs), len(axes)):
-        axes[j].axis("off")
-
-    print("DEBUG: finished loop")
-
-    plt.suptitle("Confusion Matrices Comparison", fontsize=16)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(plots_dir / "confusion_matrices_comparison.png")
-    plt.close()
-
-    if len(all_metrics) > 0:
-        df_metrics = pd.DataFrame(all_metrics)
-        df_metrics = df_metrics.fillna("-")
-        # df_metrics = df_metrics.sort_values("pesq", ascending=False)
-        print("\n=== METRICS TABLE ===")
-        print(df_metrics)
-        df_metrics.to_csv(
-            run_dir / "metrics_comparison.csv",
-            index=False
-        )
-
-        table_str = tabulate(
-        df_metrics,
-        headers="keys",
-        tablefmt="fancy_grid",
-        showindex=False
+    plot_confusion_comparison(
+        results=results,
+        class_names=class_names,
+        plots_dir=plots_dir,
+        confusion_modes=[
+            "clean",
+            "noisy",
+            "enh_trained"
+        ]
     )
 
-    print(table_str)
-
-    with open(run_dir / "metrics_comparison.txt", "w") as f:
-        f.write(table_str)
+    save_metrics_summary(
+        all_metrics,
+        run_dir
+    )
 
     total_time = time.time() - total_start
     print("\n===================================")

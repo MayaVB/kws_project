@@ -3,7 +3,8 @@ from tabulate import tabulate
 import pandas as pd
 import os
 
-from metrics import plot_confusion_per_snr, plot_confusion_per_noise, misclassified_between_two_classes, run_calc_metrics
+from metrics import misclassified_between_two_classes, run_calc_metrics
+from visualization import plot_confusion_per_snr, plot_confusion_per_noise
 
 def analyze_mode(
     acc,
@@ -100,247 +101,94 @@ def analyze_mode(
     
     return metrics_dict
 
-
-def compare_prediction_modes(
-    clean_csv,
-    noisy_csv,
-    enh_csv,
-    output_dir
+def save_prediction_reports(
+    t,
+    p,
+    f,
+    mode_name,
+    label_encoder,
+    run_dir,
+    snr=None,
+    noise=None
 ):
-    """
-    Compare clean/noisy/enhanced predictions and
-    save useful analysis files for Gradio.
-    """
+    pred_df = pd.DataFrame({
+        "filename": f,
+        "true_idx": t,
+        "pred_idx": p
+    })
 
-    print("\n[COMPARE MODES] Loading CSVs...")
-
-    clean = pd.read_csv(clean_csv)
-    noisy = pd.read_csv(noisy_csv)
-    enh = pd.read_csv(enh_csv)
-
-    # ---------------------------------
-    # keep useful columns
-    # ---------------------------------
-
-    clean = clean[
-        [
-            "filename",
-            "true_label",
-            "pred_label",
-            "correct"
-        ]
-    ].rename(
-        columns={
-            "pred_label": "pred_clean",
-            "correct": "correct_clean"
-        }
+    pred_df["true_label"] = label_encoder.inverse_transform(
+        pred_df["true_idx"]
     )
 
-    noisy = noisy[
-        [
-            "filename",
-            "true_label",
-            "pred_label",
-            "correct",
-            "snr",
-            "noise"
-        ]
-    ].rename(
-        columns={
-            "pred_label": "pred_noisy",
-            "correct": "correct_noisy"
-        }
+    pred_df["pred_label"] = label_encoder.inverse_transform(
+        pred_df["pred_idx"]
     )
 
-    enh = enh[
-        [
-            "filename",
-            "true_label",
-            "pred_label",
-            "correct"
-        ]
-    ].rename(
-        columns={
-            "pred_label": "pred_enh",
-            "correct": "correct_enh"
-        }
+    pred_df["correct"] = (
+        pred_df["true_label"]
+        ==
+        pred_df["pred_label"]
     )
 
-    # ---------------------------------
-    # merge
-    # ---------------------------------
+    pred_df["mode"] = mode_name
 
-    merged = clean.merge(
-        noisy,
-        on=["filename", "true_label"]
+    if snr is not None and len(snr) == len(pred_df):
+        pred_df["snr"] = snr
+
+    if noise is not None and len(noise) == len(pred_df):
+        pred_df["noise"] = noise
+
+    mis_df = pred_df[
+        pred_df["correct"] == False
+    ].copy()
+
+    mis_df = mis_df.sort_values(
+        ["true_label", "pred_label", "filename"]
     )
 
-    merged = merged.merge(
-        enh,
-        on=["filename", "true_label"]
-    )
-
-    # ---------------------------------
-    # categories
-    # ---------------------------------
-
-    fixed = merged[
-        (~merged["correct_noisy"])
-        &
-        (merged["correct_enh"])
-    ]
-
-    still_wrong = merged[
-        (~merged["correct_noisy"])
-        &
-        (~merged["correct_enh"])
-    ]
-
-    degraded = merged[
-        (merged["correct_noisy"])
-        &
-        (~merged["correct_enh"])
-    ]
-
-    # ---------------------------------
-    # save csv
-    # ---------------------------------
-
-    fixed.to_csv(
-        os.path.join(
-            output_dir,
-            "fixed_by_enhancement.csv"
-        ),
+    mis_df.to_csv(
+        run_dir / f"{mode_name}_misclassified.csv",
         index=False
     )
 
-    still_wrong.to_csv(
-        os.path.join(
-            output_dir,
-            "still_wrong.csv"
-        ),
+    pred_df.to_csv(
+        run_dir / f"{mode_name}_all_predictions.csv",
         index=False
-    )
-
-    degraded.to_csv(
-        os.path.join(
-            output_dir,
-            "degraded_by_enhancement.csv"
-        ),
-        index=False
-    )
-
-    fixed_sorted = fixed.sort_values(
-        ["snr", "noise"]
-    )
-
-    fixed_sorted.to_csv(
-        os.path.join(
-            output_dir,
-            "demo_examples.csv"
-        ),
-        index=False
-    )
-
-    interesting = pd.concat([
-        fixed.assign(category="fixed"),
-        still_wrong.assign(category="still_wrong"),
-        degraded.assign(category="degraded")
-    ])
-
-    clean_paths = []
-    noisy_paths = []
-    enh_paths = []
-
-    for _, row in interesting.iterrows():
-
-        c, n, e = build_audio_paths(
-            row["filename"],
-            row["true_label"]
-        )
-
-        clean_paths.append(c)
-        noisy_paths.append(n)
-        enh_paths.append(e)
-
-    interesting["clean_path"] = clean_paths
-    interesting["noisy_path"] = noisy_paths
-    interesting["enh_path"] = enh_paths
-
-    interesting.to_csv(
-        os.path.join(
-            output_dir,
-            "interesting_examples.csv"
-        ),
-        index=False
-    )
-
-
-    # ---------------------------------
-    # summary txt
-    # ---------------------------------
-
-    summary_path = os.path.join(
-        output_dir,
-        "enhancement_analysis.txt"
-    )
-
-    with open(summary_path, "w") as f:
-
-        f.write(
-            "Enhancement Analysis\n"
-        )
-
-        f.write(
-            "====================\n\n"
-        )
-
-        f.write(
-            f"Fixed by enhancement : {len(fixed)}\n"
-        )
-
-        f.write(
-            f"Still wrong          : {len(still_wrong)}\n"
-        )
-
-        f.write(
-            f"Degraded             : {len(degraded)}\n"
-        )
-
-    print(
-        "\n[COMPARE MODES]"
     )
 
     print(
-        f"Fixed      : {len(fixed)}"
+        f"Saved {len(mis_df)} misclassified samples "
+        f"for {mode_name}"
     )
 
-    print(
-        f"StillWrong : {len(still_wrong)}"
-    )
+    return pred_df, mis_df
 
-    print(
-        f"Degraded   : {len(degraded)}"
-    )
 
-def build_audio_paths(
-    filename,
-    label
+def save_metrics_summary(
+    all_metrics,
+    run_dir
 ):
-    clean_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/raw/data_new/{label}/{filename}"
+    if len(all_metrics) == 0:
+        return
+
+    df_metrics = pd.DataFrame(all_metrics)
+    df_metrics = df_metrics.fillna("-")
+
+    print("\n=== METRICS TABLE ===")
+    print(df_metrics)
+
+    table_str = tabulate(
+        df_metrics,
+        headers="keys",
+        tablefmt="fancy_grid",
+        showindex=False
     )
 
-    noisy_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/noisy_new/test/{label}/{filename}"
-    )
+    print(table_str)
 
-    enhanced_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/enhanced_new/trained_ep176/"
-        f"{label}/{filename}"
-    )
-
-    return clean_path, noisy_path, enhanced_path
+    with open(
+        run_dir / "metrics_comparison.txt",
+        "w"
+    ) as f:
+        f.write(table_str)

@@ -1,13 +1,12 @@
 # visualization.py
 import os
-from os import path
-import random
 import librosa
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
-from noise_onthefly_dataset import NoisyTestDataset, mix_with_noise_at_snr
-from kws.denoiser.stft_mask.denoise import denoise_signal
-from metrics import plot_signal_comparison
+from scipy.signal import stft
 
 def plot_example_signals(
     df_test_audio,
@@ -70,3 +69,304 @@ def plot_example_signals(
 # TODO: add option to plot random examples from the test set (not just fixed idx)
 # TODO: add option to plot examples from the enhanced dataset (not just the noisy dataset)
 # TODO: CHOOSE EXAMPLE WITH SPECIFIC SNR
+
+def plot_history(history, save_path=None):
+    epochs_range = range(1, len(history["train_loss"]) + 1)
+
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs_range, history["train_loss"], "bo-", label="Training Loss")
+    plt.plot(epochs_range, history["val_loss"],   "r*-", label="Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title(f"Training and Validation Loss")
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs_range, history["train_acc"], "bo-", label="Training Accuracy")
+    plt.plot(epochs_range, history["val_acc"],   "r*-", label="Validation Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title(f"Training and Validation Accuracy")
+    plt.legend()
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+def plot_confusion_per_snr(true_labels, pred_labels, snr_values, class_names, title, save_path=None):
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    snr_values = np.asarray(snr_values)
+
+    snrs = np.sort(np.unique(snr_values))
+
+    fig, axes = plt.subplots(2, 3, figsize=(12,10))
+    axes = axes.flatten()
+
+    for i,s in enumerate(snrs):
+        mask = snr_values == s
+        cm = confusion_matrix(
+            true_labels[mask],
+            pred_labels[mask],
+            labels=np.arange(len(class_names))
+        )
+
+        sns.heatmap(
+            cm,
+            ax=axes[i],
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+        axes[i].set_title(f"SNR={s} dB")
+
+    for i in range(len(snrs), len(axes)):
+        axes[i].axis("off")
+
+    fig.suptitle(title)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+def plot_confusion_per_noise(true_labels, pred_labels, noise_names, class_names, title, save_path=None):
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+    noise_names = np.asarray(noise_names)
+    noises = np.unique(noise_names)
+    
+    fig, axes = plt.subplots(2, 3, figsize=(12,10))
+    axes = axes.flatten()
+
+    for i, n in enumerate(noises):
+        mask = noise_names == n
+        cm = confusion_matrix(
+            true_labels[mask],
+            pred_labels[mask],
+            labels=np.arange(len(class_names))
+        )
+
+        sns.heatmap(
+            cm,
+            ax=axes[i],
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+        axes[i].set_title(f"noise={n}")
+
+    fig.suptitle(title)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+def _compute_spectrogram(x, fs):
+    f, t, Zxx = stft(x, fs=fs, nperseg=512, noverlap=256)
+    S = np.abs(Zxx)
+    return f, t, 20 * np.log10(S + 1e-10)
+
+
+def plot_signal_comparison(clean, noisy,
+                            # denoised, 
+                            enhanced_signals=None,
+                            fs=16000, title="Signal Comparison", save_path=None):
+    """
+    Plot waveform + spectrogram for clean / noisy / denoised signals
+    """
+
+    signals = [
+    ("Clean", clean),
+    ("Noisy", noisy),
+    # ("Denoised", denoised),
+    ]
+
+    for method_name, sig in enhanced_signals.items():
+        signals.append(
+            (
+                f"Enhanced ({method_name})",
+                sig
+            )
+        )
+
+    n_signals = len(signals) 
+    fig, axes = plt.subplots(
+        n_signals,
+        2,
+        figsize=(12, 2*n_signals)
+    )
+
+    for i, (name, sig) in enumerate(signals):
+
+        # ===== waveform =====
+        axes[i, 0].plot(sig)
+        axes[i, 0].set_title(f"{name} - Waveform")
+        axes[i, 0].set_xlim([0, len(sig)])
+
+        # ===== spectrogram =====
+        f, t, S_db = _compute_spectrogram(sig, fs)
+
+        im = axes[i, 1].pcolormesh(t, f, S_db, shading='auto')
+        axes[i, 1].set_title(f"{name} - Spectrogram")
+        axes[i, 1].set_ylabel("Hz")
+        axes[i, 1].set_xlabel("Time")
+
+    fig.suptitle(title, fontsize=14)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+def plot_confusion_comparison(
+    results,
+    class_names,
+    plots_dir,
+    confusion_modes=None
+):
+    """
+    Plot and save confusion matrices for multiple modes.
+    Also saves individual confusion matrix figures.
+    """
+
+    if confusion_modes is None:
+        confusion_modes = [
+            "clean",
+            "noisy",
+            "enh_trained"
+        ]
+
+    display_names = {
+        "clean": "Clean",
+        "noisy": "Noisy",
+        "enh_baseline": "Enhanced Baseline",
+        "enh_trained": "Enhanced Trained"
+    }
+
+    pairs = []
+
+    for mode_name in confusion_modes:
+
+        if mode_name not in results:
+            print(f"WARNING: {mode_name} not found in results")
+            continue
+
+        mode_res = results[mode_name]
+
+        pairs.append(
+            (
+                mode_name,
+                mode_res["t"],
+                mode_res["p"]
+            )
+        )
+
+    n_modes = len(pairs)
+
+    if n_modes == 0:
+        return
+
+    ncols = len(pairs)
+    nrows = 1
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(7 * ncols, 6)
+    )
+
+    axes = np.array(axes).reshape(-1)
+
+    for i, (name, t, p) in enumerate(pairs):
+
+        cm = confusion_matrix(t, p)
+
+        display_name = display_names.get(
+            name,
+            name
+        )
+
+        sns.heatmap(
+            cm,
+            ax=axes[i],
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+
+        axes[i].set_title(
+            display_name,
+            fontsize=14,
+            fontweight="bold"
+        )
+
+        axes[i].set_xlabel("Predicted")
+        axes[i].set_ylabel("True")
+
+        # save single figure
+
+        single_fig, single_ax = plt.subplots(
+            figsize=(8, 6)
+        )
+
+        sns.heatmap(
+            cm,
+            ax=single_ax,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names
+        )
+
+        single_ax.set_title(
+            display_name,
+            fontsize=14,
+            fontweight="bold"
+        )
+
+        single_ax.set_xlabel("Predicted")
+        single_ax.set_ylabel("True")
+
+        plt.tight_layout()
+
+        plt.savefig(
+            plots_dir / f"confusion_{name}.png"
+        )
+
+        plt.close(single_fig)
+
+    for j in range(len(pairs), len(axes)):
+        axes[j].axis("off")
+
+    plt.suptitle(
+        "Confusion Matrices Comparison",
+        fontsize=16
+    )
+
+    plt.tight_layout(
+        rect=[0, 0, 1, 0.95]
+    )
+
+    plt.savefig(
+        plots_dir /
+        "confusion_matrices_comparison.png"
+    )
+
+    plt.close()
