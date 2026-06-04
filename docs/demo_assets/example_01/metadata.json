@@ -1,0 +1,11 @@
+{
+    "filename": "e0315cf6_nohash_3.wav",
+    "true_word": "four",
+    "pred_noisy": "no",
+    "pred_enh": "four",
+    "noise": "dude_miaowing",
+    "snr": 2.5,
+    "label": "four",
+    "noisy_correct": false,
+    "enh_correct": true
+}

@@ -1,0 +1,11 @@
+{
+    "filename": "5e033479_nohash_0.wav",
+    "true_word": "go",
+    "pred_noisy": "stop",
+    "pred_enh": "go",
+    "noise": "dude_miaowing",
+    "snr": 2.5,
+    "label": "go",
+    "noisy_correct": false,
+    "enh_correct": true
+}

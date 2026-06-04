@@ -1,0 +1,11 @@
+{
+    "filename": "f4504600_nohash_0.wav",
+    "true_word": "off",
+    "pred_noisy": "on",
+    "pred_enh": "off",
+    "noise": "doing_the_dishes",
+    "snr": 2.5,
+    "label": "off",
+    "noisy_correct": false,
+    "enh_correct": true
+}
