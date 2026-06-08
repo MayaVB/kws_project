@@ -1,10 +1,10 @@
-# Noise Robustness in Keyword Spotting using Speech Enhancement
+# Noise Robustness in Keyword Spotting 
 
 **Authors:** Avital Skop, Ido Ben David  
 **Supervisor:** Maya Veisman  
 **Academic Supervisor:** Prof. Sharon Gannot
 
-[![Demo](https://img.shields.io/badge/Demo-GitHub%20Pages-blue)](https://avitalskop.github.io/kws-demo/)
+**[Demo Page](https://avitalskop.github.io/kws-demo/)**
 
 ---
 
@@ -21,23 +21,6 @@ We evaluate a DS-CNN keyword spotting model under three operating conditions:
 3. Enhanced Speech (Trained SGMSE → DS-CNN)
 
 The goal is to quantify the effect of speech enhancement on keyword recognition accuracy and analyze the relationship between speech quality improvement and downstream classification performance.
-
----
-
-## Demo
-
-🔗 **Interactive Demo:**  
-https://avitalskop.github.io/kws-demo/
-
-The demo presents real examples where noisy speech caused keyword misclassification while speech enhancement successfully restored the correct prediction.
-
-Each example includes:
-
-- Noisy speech sample
-- Enhanced speech sample
-- Spectrogram comparison
-- Noise type and SNR level
-- Predicted keyword before and after enhancement
 
 ---
 
@@ -60,40 +43,6 @@ The same DS-CNN classifier is evaluated on clean, noisy, and enhanced speech to 
 
 ---
 
-## Key Features
-
-- DS-CNN keyword spotting model
-- MFCC acoustic features
-- Real-world background noise augmentation
-- Multiple SNR operating conditions
-- Speech enhancement using SGMSE
-- Evaluation on both speech quality and classification performance
-- Interactive audio demonstration
-
----
-
-## Dataset
-
-### Speech Dataset
-
-Google Speech Commands v2
-
-https://www.kaggle.com/datasets/sylkaladin/speech-commands-v2
-
-### Noise Dataset
-
-Environmental noise recordings were mixed with speech samples at multiple SNR levels to simulate realistic acoustic conditions.
-
-Examples include:
-
-- White Noise
-- Running Tap
-- Doing The Dishes
-- Exercise Bike
-- Dude Miaowing
-
----
-
 ## Speech Enhancement Model
 
 The speech enhancement stage is based on the Score-based Generative Model for Speech Enhancement (SGMSE).
@@ -104,7 +53,7 @@ Two enhancement configurations were evaluated:
 
 The official pretrained SGMSE checkpoint was used directly to enhance noisy speech samples and evaluate its effect on keyword recognition performance.
 
-### 2. Project-Trained SGMSE
+### 2. Trained SGMSE
 
 The SGMSE model was further trained on a custom dataset generated for this project. The training set consisted of clean speech signals from Google Speech Commands mixed with various real-world background noises at multiple SNR levels.
 
