@@ -1,73 +1,171 @@
-# Noise Robustness in Keyword Spotting (KWS)
-This repository contains the implementation and experiments for the final project
-“Noise Robustness in Keyword Spotting”, conducted as part of the Electrical Engineering program
-(Signal Processing track).
+# Noise Robustness in Keyword Spotting using Speech Enhancement
 
-The project investigates how background noise affects the performance of Keyword Spotting (KWS) systems, and whether integrating a Denoising module can improve robustness under noisy conditions.
+**Authors:** Avital Skop, Ido Ben David  
+**Supervisor:** Maya Veisman  
+**Academic Supervisor:** Prof. Sharon Gannot
 
-### Project Overview
-Keyword Spotting (KWS) systems are widely used in voice-controlled devices and human–machine interfaces.
-However, their performance often degrades significantly in real-world noisy environments.
+[![Demo](https://img.shields.io/badge/Demo-GitHub%20Pages-blue)](https://avitalskop.github.io/kws-demo/)
 
-The goal of this project is to evaluate and improve the robustness of a KWS system by integrating a Denoiser module before the classification stage.
+---
 
-We evaluate three main scenarios:
-1. Clean Audio → KWS
-2. Noisy Audio → KWS
-3. Noisy Audio → Denoiser → KWS
+## Description
 
-Performance is compared across different noise levels (SNR values) to assess the effectiveness of noise reduction techniques.
+Keyword Spotting (KWS) systems are widely used in voice assistants, smart devices, and embedded speech interfaces. However, their performance often degrades significantly in noisy acoustic environments.
 
-### Objectives
+This project investigates whether a speech enhancement front-end can improve keyword recognition robustness under different noise conditions and signal-to-noise ratios (SNRs).
 
-1. Build a baseline KWS system using MFCC features and a CNN-based model (DS-CNN).
-2. Simulate realistic noisy environments by adding background noise at different SNR levels.
-3. Design and train a Denoiser model (Autoencoder / UNet-based).
-4. Evaluate the impact of denoising on KWS performance.
-5. Compare different training strategies: Fine-Tuning / Joint (End-to-End) Training
-6. Analyze performance using quantitative metrics and visualizations.
+We evaluate a DS-CNN keyword spotting model under three operating conditions:
 
-### Data Preparation
-**Speech Dataset**
+1. Clean Speech
+2. Noisy Speech
+3. Enhanced Speech (Trained SGMSE → DS-CNN)
 
-The project uses the Google Speech Commands v2 dataset:
+The goal is to quantify the effect of speech enhancement on keyword recognition accuracy and analyze the relationship between speech quality improvement and downstream classification performance.
+
+---
+
+## Demo
+
+🔗 **Interactive Demo:**  
+https://avitalskop.github.io/kws-demo/
+
+The demo presents real examples where noisy speech caused keyword misclassification while speech enhancement successfully restored the correct prediction.
+
+Each example includes:
+
+- Noisy speech sample
+- Enhanced speech sample
+- Spectrogram comparison
+- Noise type and SNR level
+- Predicted keyword before and after enhancement
+
+---
+
+## Architecture
+
+<p align="center">
+  <img src="docs/pipeline.png" width="1000">
+</p>
+
+The proposed pipeline consists of:
+
+- Google Speech Commands dataset
+- Noise injection at multiple SNR levels
+- Speech enhancement using a trained SGMSE model
+- MFCC feature extraction
+- DS-CNN keyword spotting network
+- Keyword classification
+
+The same DS-CNN classifier is evaluated on clean, noisy, and enhanced speech to isolate the contribution of the enhancement stage.
+
+---
+
+## Key Features
+
+- DS-CNN keyword spotting model
+- MFCC acoustic features
+- Real-world background noise augmentation
+- Multiple SNR operating conditions
+- Speech enhancement using SGMSE
+- Evaluation on both speech quality and classification performance
+- Interactive audio demonstration
+
+---
+
+## Dataset
+
+### Speech Dataset
+
+Google Speech Commands v2
+
 https://www.kaggle.com/datasets/sylkaladin/speech-commands-v2
 
-Download the dataset and place it in the appropriate data directory as defined in the project scripts.
+### Noise Dataset
 
-**Noise Data**
+Environmental noise recordings were mixed with speech samples at multiple SNR levels to simulate realistic acoustic conditions.
 
-Background noise samples are added to clean speech signals to simulate noisy environments at different SNR levels.
+Examples include:
 
-### Installation and Environment Setup
-Prerequisites
-1. Python 3.9 - 3.11
-2. Git
-3. (Optional) GPU with CUDA support for faster training
+- White Noise
+- Running Tap
+- Doing The Dishes
+- Exercise Bike
+- Dude Miaowing
 
-**Step 1 - Clone the repository**
+---
 
-https://github.com/MayaVB/kws_project.git
+## Speech Enhancement Model
 
-**Step 2 - Create and activate a virtual environment**
+The speech enhancement stage is based on the Score-based Generative Model for Speech Enhancement (SGMSE).
 
-python -m venv .venv
-source .venv/bin/activate        # Linux/Mac
-.venv\Scripts\activate           # Windows
+Two enhancement configurations were evaluated:
 
-**Step 3 - Install dependencies**
+### 1. Pretrained SGMSE
 
-pip install -r requirements.txt
+The official pretrained SGMSE checkpoint was used directly to enhance noisy speech samples and evaluate its effect on keyword recognition performance.
 
-### References
-KWS on Microcontrollers, Google Research
+### 2. Project-Trained SGMSE
+
+The SGMSE model was further trained on a custom dataset generated for this project. The training set consisted of clean speech signals from Google Speech Commands mixed with various real-world background noises at multiple SNR levels.
+
+During training, multiple checkpoints were saved and evaluated using both speech enhancement metrics and keyword spotting performance.
+
+The final checkpoint used in the experiments was selected based on the overall tradeoff between:
+
+- PESQ
+- ESTOI
+- SI-SDR
+- SI-SIR
+- SI-SAR
+- Keyword recognition accuracy
+
+---
+
+## Keyword Spotting Model
+
+The keyword recognizer is based on DS-CNN:
+
+- MFCC input features
+- Depthwise separable convolutions
+- Lightweight architecture suitable for embedded deployment
+- Supervised keyword classification
+
+---
+
+## Evaluation
+
+The proposed pipeline was evaluated under clean, noisy, and enhanced conditions.
+
+Keyword spotting performance was analyzed using:
+
+- Accuracy
+- Confusion Matrix
+- Per-SNR Analysis
+- Per-Noise Analysis
+
+Speech enhancement metrics were additionally used during model selection and checkpoint comparison.
+
+---
+
+## Main Findings
+
+- Background noise significantly degrades keyword recognition performance.
+- Speech enhancement consistently improves robustness compared with directly processing noisy speech.
+- Different enhancement checkpoints exhibit different tradeoffs between interference suppression and speech fidelity.
+- Improvements in speech quality metrics do not always translate directly into classification gains.
+
+---
+
+## References
+
+### Google Speech Commands Dataset
+
+https://arxiv.org/abs/1804.03209
+
+### DS-CNN Keyword Spotting
+
 https://arxiv.org/abs/1711.07128
 
-### Authors
-Ido Ben David
+### SGMSE
 
-Avital Skop
-
-Supervised by Maya Veisman 
-
-Academic Supervisor: Prof. Sharon Gannot
+https://arxiv.org/abs/2208.05830
