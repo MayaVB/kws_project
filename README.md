@@ -27,7 +27,7 @@ The goal is to quantify the effect of speech enhancement on keyword recognition 
 ## Architecture
 
 <p align="center">
-  <img src="docs/pipeline_new.png" width="1000">
+  <img src="docs/Pipeline_new.png" width="1000">
 </p>
 
 The proposed pipeline consists of:
