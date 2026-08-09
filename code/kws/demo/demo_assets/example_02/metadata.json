@@ -1,0 +1,11 @@
+{
+    "filename": "8e05039f_nohash_4.wav",
+    "true_word": "off",
+    "pred_noisy": "on",
+    "pred_enh": "off",
+    "noise": "Exercise Bike",
+    "snr": 7.5,
+    "label": "off",
+    "noisy_correct": false,
+    "enh_correct": true
+}

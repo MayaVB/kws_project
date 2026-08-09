@@ -361,7 +361,8 @@ def run(cfg: dict):
         plots_dir=plots_dir,
         noisy_root=noisy_root,
         enhanced_versions=enhanced_versions,
-        idx_vis=0
+        idx_vis=0,
+        run_dir=run_dir
     )
 
     # =====================================

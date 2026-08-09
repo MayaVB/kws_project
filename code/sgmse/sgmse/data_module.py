@@ -64,6 +64,8 @@ class Specs(Dataset):
         pad = max(target_len - current_len, 0)
         if pad == 0:
             # extract random part of the audio file
+            # like augmentation, but deterministic for reproducibility
+            # even its the same file, the model will see different parts of it in different epochs
             if self.shuffle_spec:
                 start = int(np.random.uniform(0, current_len-target_len))
             else:
@@ -86,6 +88,9 @@ class Specs(Dataset):
         x = x / normfac
         y = y / normfac
 
+        # =====================================================================
+        # from this part the model will see the spectrograms, not the waveforms
+        # =====================================================================
         X = torch.stft(x, **self.stft_kwargs)
         Y = torch.stft(y, **self.stft_kwargs)
 

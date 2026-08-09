@@ -1,0 +1,11 @@
+{
+    "filename": "f17be97f_nohash_1.wav",
+    "true_word": "go",
+    "pred_noisy": "dog",
+    "pred_enh": "go",
+    "noise": "Doing the Dishes",
+    "snr": 2.5,
+    "label": "go",
+    "noisy_correct": false,
+    "enh_correct": true
+}

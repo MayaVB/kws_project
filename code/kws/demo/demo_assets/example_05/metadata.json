@@ -1,0 +1,11 @@
+{
+    "filename": "c1d39ce8_nohash_0.wav",
+    "true_word": "bird",
+    "pred_noisy": "bed",
+    "pred_enh": "bird",
+    "noise": "Exercise Bike",
+    "snr": 7.5,
+    "label": "bird",
+    "noisy_correct": false,
+    "enh_correct": true
+}

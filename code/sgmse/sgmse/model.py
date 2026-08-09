@@ -37,12 +37,13 @@ class ScoreModel(pl.LightningModule):
         parser.add_argument("--l1_weight", type=float, default=0.001, help="The balance between the time-frequency and time-domain losses.")
         parser.add_argument("--pesq_weight", type=float, default=0.0, help="The balance between the time-frequency and time-domain losses.")
         parser.add_argument("--sr", type=int, default=16000, help="The sample rate of the audio files.")
+        parser.add_argument("--weight_decay", type=float, default=0.0, help="The weight decay for the optimizer.")
         return parser
 
     def __init__(
         self, backbone, sde, lr=1e-4, ema_decay=0.999, t_eps=0.03, num_eval_files=20, loss_type='score_matching', 
         loss_weighting='sigma^2', network_scaling=None, c_in='1', c_out='1', c_skip='0', sigma_data=0.1, 
-        l1_weight=0.001, pesq_weight=0.0, sr=16000, data_module_cls=None, **kwargs
+        l1_weight=0.001, pesq_weight=0.0, sr=16000, weight_decay=0.0, data_module_cls=None, **kwargs
     ):
         """
         Create a new ScoreModel.
@@ -80,6 +81,7 @@ class ScoreModel(pl.LightningModule):
         self.sigma_data = sigma_data
         self.num_eval_files = num_eval_files
         self.sr = sr
+        self.weight_decay = weight_decay
         # Initialize PESQ loss if pesq_weight > 0.0
         if pesq_weight > 0.0:
             self.pesq_loss = PesqLoss(1.0, sample_rate=sr).eval()
@@ -89,8 +91,33 @@ class ScoreModel(pl.LightningModule):
         self.data_module = data_module_cls(**kwargs, gpu=kwargs.get('gpus', 0) > 0)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, self.parameters()),
+            lr=self.lr,
+            weight_decay=self.weight_decay
+        )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=0.5,
+            patience=15,
+            threshold=1e-3,
+            threshold_mode="rel",
+            cooldown=1,
+            min_lr=1e-8
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "valid_loss",
+                "interval": "epoch",
+                "frequency": 1
+            }
+        }
 
     def optimizer_step(self, *args, **kwargs):
         # Method overridden so that the EMA params are updated after each optimizer step
@@ -188,11 +215,19 @@ class ScoreModel(pl.LightningModule):
         return loss
 
     def _step(self, batch, batch_idx):
+        # the batch is a tuple of (clean_speech, noisy_speech) spectrograms, 
+        # where clean_speech is the target and noisy_speech is the condition
         x, y = batch
+        # Sample a random time t for each sample in the batch, and compute the loss
         t = torch.rand(x.shape[0], device=x.device) * (self.sde.T - self.t_eps) + self.t_eps
+        # in OUVE SDE, the mean and std are computed using the marginal probability of x given y and t
+        # mean(t) = x * exp(-theta * t) + y * (1 - exp(-theta * t))
+        # in the beginning the mean is close to x, and in the end it is close to y
         mean, std = self.sde.marginal_prob(x, y, t)
         z = torch.randn_like(x)  # i.i.d. normal distributed with var=0.5
         sigma = std[:, None, None, None]
+        # what is passed to the model is x_t = mean + sigma * z, 
+        # which is a sample from the marginal distribution of x given y and t
         x_t = mean + sigma * z
         forward_out = self(x_t, y, t)
         loss = self._loss(forward_out, x_t, z, t, mean, x)
@@ -201,6 +236,7 @@ class ScoreModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         loss = self._step(batch, batch_idx)
         self.log('train_loss', loss, on_step=True, on_epoch=True, sync_dist=True, prog_bar=True)
+        self.log("lr", self.optimizers().param_groups[0]["lr"], on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -373,6 +409,9 @@ class ScoreModel(pl.LightningModule):
                 
         # In [1] and [2], we use the old code:
         else:
+            # if every spectogram has 2 channels, 
+            # after cat the input will have 4 channels, 
+            # and the model will be trained to predict the score function
             dnn_input = torch.cat([x_t, y], dim=1)            
             score = -self.dnn(dnn_input, t)
             return score

@@ -99,10 +99,10 @@ def analyze_mode(
             print(mis.groupby("noise").size())
 
     metrics_dict = {
-    "mode": mode,
-    "acc": round(acc, 4)
+        "mode": mode,
+        "acc": f"{acc:.2f}"
     }
-
+    
     if enhanced_root is not None:
         print(f"\n=== METRICS {mode.upper()} ===")
 

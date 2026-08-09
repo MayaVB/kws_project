@@ -9,6 +9,7 @@ This module contains:
 - enhanced speech visualizations
 """
 import os
+import pandas as pd
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,6 +24,7 @@ def plot_example_signals(
     noisy_root,
     enhanced_versions,  # dict of {mode_name: enhanced_root}
     idx_vis=0,
+    run_dir=None
 ):
     """
     Plot a representative test example.
@@ -34,11 +36,28 @@ def plot_example_signals(
 
     The example is selected from the fixed test dataset.
     """
-    # BASIC INFO
+    print(df_test_audio.columns.tolist())
+    
+    # INFO
     filename = df_test_audio["filename"].iloc[idx_vis]
     label = df_test_audio["label"].iloc[idx_vis]
 
-    print(f"[EXAMPLE] label={label}, file={filename}")
+    pred_df = pd.read_csv(
+    run_dir / "noisy_all_predictions.csv")
+
+    row = pred_df[
+        pred_df["filename"] == filename
+    ].iloc[0]
+
+    snr = row["snr"]
+    noise = row["noise"]
+
+    print(
+        f"[EXAMPLE] label={label}, "
+        f"file={filename}, "
+        f"SNR={snr} dB, "
+        f"noise={noise}"
+    )
 
     # CLEAN
     clean_sig = df_test_audio["audio_data"].iloc[idx_vis]
@@ -47,7 +66,7 @@ def plot_example_signals(
     noisy_path = os.path.join(noisy_root, "test", label, filename)
 
     if not os.path.exists(noisy_path):
-        print(f"❌ Missing noisy file: {noisy_path}")
+        print(f"Missing noisy file: {noisy_path}")
         return
 
     noisy_sig, _ = librosa.load(noisy_path, sr=sampling_rate)
@@ -60,7 +79,7 @@ def plot_example_signals(
             sig, _ = librosa.load(path, sr=sampling_rate)
             enhanced_signals[method_name] = sig
         else:
-            print(f"⚠️ Missing enhanced: {path}")
+            print(f"Missing enhanced: {path}")
 
     # PLOT
     plot_signal_comparison(
@@ -68,8 +87,17 @@ def plot_example_signals(
         noisy=noisy_sig,
         enhanced_signals=enhanced_signals,
         fs=sampling_rate,
-        title=f"{label}/{filename}",
+        title=f"{label}/{filename}/SNR={snr}dB/{noise}",
         save_path=plots_dir / f"Signal_Comparison_Example_{filename}.png"
+    )
+
+    plot_mfcc_comparison(
+        clean=clean_sig,
+        noisy=noisy_sig,
+        enhanced_signals=enhanced_signals,
+        fs=sampling_rate,
+        title=f"{label}/{filename}/SNR={snr}dB/{noise}",
+        save_path=plots_dir / f"MFCC_Comparison_Example_{filename}.png"
     )
 
 def plot_history(history, save_path=None):
@@ -402,6 +430,64 @@ def plot_confusion_comparison(
 
     plt.close()
 
-# TODO: add option to plot random examples
-# TODO: add option to plot examples from enhanced dataset
-# TODO: choose example with specific SNR
+def plot_mfcc_comparison(
+    clean,
+    noisy,
+    enhanced_signals=None,
+    fs=16000,
+    n_mfcc=13,
+    title="MFCC Comparison",
+    save_path=None
+):
+    """
+    Plot MFCC comparisons for:
+
+    - clean speech
+    - noisy speech
+    - one or more enhanced versions
+    """
+    signals = [
+        ("Clean", clean),
+        ("Noisy", noisy),
+    ]
+
+    if enhanced_signals is not None:
+        for method_name, sig in enhanced_signals.items():
+            signals.append(
+                (
+                    f"Enhanced ({method_name})",
+                    sig
+                )
+            )
+    else:
+        print("No enhanced signals provided for comparison.")
+
+    n_signals = len(signals)
+    fig, axes = plt.subplots(
+        n_signals,
+        1,
+        figsize=(12, 3 * n_signals)
+    )
+
+    for i, (name, sig) in enumerate(signals):
+        mfccs = librosa.feature.mfcc(y=sig, sr=fs, n_mfcc=n_mfcc)
+
+        im = axes[i].imshow(
+            mfccs,
+            aspect='auto',
+            origin='lower',
+            cmap='viridis'
+        )
+        axes[i].set_title(f"{name} - MFCC")
+        axes[i].set_ylabel("MFCC Coefficients")
+        axes[i].set_xlabel("Frames")
+
+    fig.suptitle(title, fontsize=14)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+    
+    

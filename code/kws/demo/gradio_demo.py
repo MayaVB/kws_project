@@ -1,101 +1,162 @@
-import gradio as gr
+import os
 import pandas as pd
+import gradio as gr
 
-"""
-gradio_demo.py
+# =====================================================
+# PATHS
+# =====================================================
 
-Interactive Gradio demo for the project.
+CSV_PATH = (
+    # "/home/dsi/skopavi/Project/kws_project/outputs"
+    # "/new_runs/2026-06-04_11-33-13_go_no/interesting_examples.csv"
+    # "/home/dsi/skopavi/Project/kws_project/outputs/"
+    # "new_runs/2026-06-01_14-21-49_three_tree_two/interesting_examples.csv"
+    # "/home/dsi/skopavi/Project/kws_project/outputs"
+    # "/new_runs/2026-05-31_20-09-53_bed_bird_cat/interesting_examples.csv"
+    # "/home/dsi/skopavi/Project/kws_project/outputs/new_runs/2026-06-08_12-14-57/interesting_examples.csv"
+    "/home/dsi/skopavi/Project/kws_project/outputs/new_runs/2026-07-07_11-36-05/interesting_examples.csv"
+)
 
-The demo visualizes examples where speech enhancement
-improved keyword classification performance.
+SAVE_PATH = (
+    "/home/dsi/skopavi/Project/kws_project/code/kws/demo/"
+    "selected_examples.csv"
+)
 
-Displayed information:
-- clean audio
-- noisy audio
-- enhanced audio
-- model predictions
-- SNR
-- noise type
-"""
 # =====================================================
 # LOAD DATA
 # =====================================================
 
-CSV_PATH = (
-    "/home/dsi/skopavi/Project/kws_project/"
-    "outputs/new_runs/2026-05-31_20-09-53/"
-    "interesting_examples.csv"
-)
-
 df = pd.read_csv(CSV_PATH)
 
-# show just the "fixed" examples where enhancement improved performance
-df = df[df["category"] == "fixed"].reset_index(drop=True)
-
-# =====================================================
-# BUILD DROPDOWN LABELS
-# =====================================================
-
-example_labels = []
-label_to_filename = {}
-
-for _, row in df.iterrows():
-
-    label = (
-        f"{row['filename']}\n"
-        f"{row['true_label']} | "
-        f"noisy→{row['pred_noisy']} | "
-        f"enh→{row['pred_enh']} | "
-        f"{row['snr']} dB | "
-        f"{row['noise']}"
+df = (
+    df[df["category"] == "fixed"]
+    .reset_index(drop=True)
 )
 
-    example_labels.append(label)
-
-    label_to_filename[label] = row["filename"]
+N = len(df)
 
 # =====================================================
-# CALLBACK
+# BUILD HEADER
 # =====================================================
 
-def load_example(selected_label):
+def build_header(idx):
 
-    filename = label_to_filename[selected_label]
+    row = df.iloc[idx]
 
-    row = df[df["filename"] == filename].iloc[0]
+    return f"""
+# Example {idx + 1} / {N}
 
-    info = f"""
-True Label:
-{row['true_label']}
+**Filename:** `{row['filename']}`
 
-Clean Prediction:
-{row['pred_clean']}
-(correct={row['correct_clean']})
+**True Label:** `{row['true_label']}`
 
-Noisy Prediction:
-{row['pred_noisy']}
-(correct={row['correct_noisy']})
+**Noise:** `{row['noise']}`
 
-Enhanced Prediction:
-{row['pred_enh']}
-(correct={row['correct_enh']})
+**SNR:** `{row['snr']} dB`
 
-Noise:
-{row['noise']}
+---
 
-SNR:
-{row['snr']} dB
+### ❌ Noisy Prediction
 
-Filename:
-{row['filename']}
+**{row['pred_noisy']}**
+
+---
+
+### ✅ Enhanced Prediction
+
+**{row['pred_enh']}**
 """
 
+
+# =====================================================
+# LOAD EXAMPLE
+# =====================================================
+
+def load_example(idx):
+
+    idx = max(0, min(int(idx), N - 1))
+
+    row = df.iloc[idx]
+
     return (
-        info,
+        idx,
+        build_header(idx),
         row["clean_path"],
         row["noisy_path"],
-        row["enh_path"]
+        row["enh_path"],
+        ""
     )
+
+
+# =====================================================
+# NAVIGATION
+# =====================================================
+
+def next_example(idx):
+
+    idx = min(int(idx) + 1, N - 1)
+
+    return load_example(idx)
+
+
+def previous_example(idx):
+
+    idx = max(int(idx) - 1, 0)
+
+    return load_example(idx)
+
+
+# =====================================================
+# SAVE EXAMPLE
+# =====================================================
+
+def save_example(idx):
+
+    idx = int(idx)
+
+    row = df.iloc[idx]
+
+    cols = [
+        "filename",
+        "true_label",
+        "pred_clean",
+        "pred_noisy",
+        "pred_enh",
+        "noise",
+        "snr"
+    ]
+
+    selected = row[cols].to_frame().T
+
+    if os.path.exists(SAVE_PATH):
+
+        saved = pd.read_csv(SAVE_PATH)
+
+        exists = (
+            (saved["filename"] == row["filename"]) &
+            (saved["noise"] == row["noise"]) &
+            (saved["snr"] == row["snr"])
+        ).any()
+
+        if exists:
+            return "✅ Already saved."
+
+        saved = pd.concat(
+            [saved, selected],
+            ignore_index=True
+        )
+
+    else:
+
+        saved = selected
+
+    saved.to_csv(
+        SAVE_PATH,
+        index=False
+    )
+
+    return "⭐ Example saved."
+
 
 # =====================================================
 # UI
@@ -105,16 +166,19 @@ with gr.Blocks(title="KWS Enhancement Demo") as demo:
 
     gr.Markdown("# KWS Enhancement Demo")
 
-    example_dd = gr.Dropdown(
-        choices=example_labels,
-        value=example_labels[0],
-        label="Example"
-    )
+    current_idx = gr.State(0)
 
-    info_box = gr.Textbox(
-        label="Prediction Information",
-        lines=15
-    )
+    header = gr.Markdown()
+
+    with gr.Row():
+
+        prev_btn = gr.Button("⬅ Previous")
+
+        save_btn = gr.Button("⭐ Save Example")
+
+        next_btn = gr.Button("Next ➡")
+
+    status = gr.Markdown()
 
     with gr.Row():
 
@@ -126,31 +190,53 @@ with gr.Blocks(title="KWS Enhancement Demo") as demo:
             label="Noisy Audio"
         )
 
-        enh_audio = gr.Audio(
+        enhanced_audio = gr.Audio(
             label="Enhanced Audio"
         )
 
-    example_dd.change(
+    demo.load(
         fn=load_example,
-        inputs=example_dd,
+        inputs=current_idx,
         outputs=[
-            info_box,
+            current_idx,
+            header,
             clean_audio,
             noisy_audio,
-            enh_audio
+            enhanced_audio,
+            status
         ]
     )
 
-    # טload the first example on startup
-    demo.load(
-        fn=load_example,
-        inputs=example_dd,
+    next_btn.click(
+        fn=next_example,
+        inputs=current_idx,
         outputs=[
-            info_box,
+            current_idx,
+            header,
             clean_audio,
             noisy_audio,
-            enh_audio
+            enhanced_audio,
+            status
         ]
+    )
+
+    prev_btn.click(
+        fn=previous_example,
+        inputs=current_idx,
+        outputs=[
+            current_idx,
+            header,
+            clean_audio,
+            noisy_audio,
+            enhanced_audio,
+            status
+        ]
+    )
+
+    save_btn.click(
+        fn=save_example,
+        inputs=current_idx,
+        outputs=status
     )
 
 # =====================================================
@@ -158,7 +244,7 @@ with gr.Blocks(title="KWS Enhancement Demo") as demo:
 # =====================================================
 
 demo.launch(
-    server_name="0.0.0.0",
+    server_name="127.0.0.1",
     server_port=7860,
     show_api=False
 )

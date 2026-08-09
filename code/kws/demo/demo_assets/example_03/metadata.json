@@ -1,0 +1,11 @@
+{
+    "filename": "b72e58c9_nohash_1.wav",
+    "true_word": "tree",
+    "pred_noisy": "two",
+    "pred_enh": "tree",
+    "noise": "Dishwashing",
+    "snr": 2.5,
+    "label": "tree",
+    "noisy_correct": false,
+    "enh_correct": true
+}

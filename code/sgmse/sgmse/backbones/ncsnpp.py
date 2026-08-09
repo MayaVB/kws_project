@@ -101,6 +101,8 @@ class NCSNpp(nn.Module):
         combine_method = progressive_combine.lower()
         combiner = functools.partial(Combine, method=combine_method)
 
+        # because CNN does not support complex numbers, 
+        # we will convert the complex spectrograms into 4 channels
         num_channels = 4  # x.real, x.imag, y.real, y.imag
         self.output_layer = nn.Conv2d(num_channels, 2, 1)
 
@@ -164,12 +166,14 @@ class NCSNpp(nn.Module):
         if progressive_input != 'none':
             input_pyramid_ch = channels
 
+        # from 4 channels to 128 channels
         modules.append(conv3x3(channels, nf))
         hs_c = [nf]
 
         in_ch = nf
         for i_level in range(num_resolutions):
             # Residual blocks for this resolution
+            # the image get smaller and smaller, but the number of features get larger and larger
             for i_block in range(num_res_blocks):
                 out_ch = nf * ch_mult[i_level]
                 modules.append(ResnetBlock(in_ch=in_ch, out_ch=out_ch))
@@ -196,6 +200,8 @@ class NCSNpp(nn.Module):
 
                 hs_c.append(in_ch)
 
+        # bottleneck
+        # here we decide what the speech and noise look like in the latent space, and how they are combined
         in_ch = hs_c[-1]
         modules.append(ResnetBlock(in_ch=in_ch))
         modules.append(AttnBlock(channels=in_ch))
@@ -347,6 +353,7 @@ class NCSNpp(nn.Module):
         # Upsampling block
         for i_level in reversed(range(self.num_resolutions)):
             for i_block in range(self.num_res_blocks + 1):
+                # skip connection from down path - to restore the information lost in downsampling
                 h = modules[m_idx](torch.cat([h, hs.pop()], dim=1), temb)
                 m_idx += 1
 

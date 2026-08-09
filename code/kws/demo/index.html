@@ -1,0 +1,451 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>
+KWS Enhancement Demo
+</title>
+
+<style>
+
+body{
+    font-family:Arial,sans-serif;
+    max-width:1400px;
+    margin:auto;
+    padding:40px;
+    line-height:1.6;
+}
+
+h1{
+    text-align:center;
+    color:#003366;
+}
+
+h2{
+    text-align:center;
+    color:#003366;
+    margin-top:60px;
+}
+
+.intro{
+    max-width:800px;
+    margin:auto;
+    text-align:justify;
+    text-justify:inter-word;
+    font-size:18px;
+}
+
+.example-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:25px;
+    margin-top:25px;
+}
+
+.card{
+    border:1px solid #d9d9d9;
+    border-radius:12px;
+    padding:15px;
+    background:#fafafa;
+}
+
+.card h3{
+    margin-top:0;
+    margin-bottom:10px;
+    color:#003366;
+    font-size:16px;
+    font-weight:600;
+    text-align:left;
+}
+
+audio{
+    width:100%;
+    margin-bottom:15px;
+}
+
+img{
+    width:100%;
+    border:1px solid #cccccc;
+}
+
+.bad{
+    color:red;
+    font-weight:bold;
+}
+
+.good{
+    color:green;
+    font-weight:bold;
+}
+
+.example-meta{
+    text-align:center;
+    font-size:16px;
+    color:#666;
+    margin-top:-5px;
+    margin-bottom:8px;
+}
+
+.result-line{
+    text-align:left;
+    font-size:20px;
+    font-weight:600;
+    margin-bottom:18px;
+
+    width:fit-content;
+    margin-left:auto;
+    margin-right:auto;
+}
+
+footer{
+    margin-top:60px;
+    text-align:center;
+    color:#666;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>
+Speech Enhancement for Robust Keyword Spotting
+</h1>
+
+<p class="intro">
+
+This demo presents examples from our speech enhancement
+pipeline for robust keyword spotting (KWS).
+
+Each example contains a spoken keyword mixed with
+real-world background noise at different signal-to-noise
+ratios (SNRs).
+
+In the noisy condition, the keyword recognition model
+produced an incorrect prediction.
+
+After enhancement using an SGMSE model trained on our project dataset,
+the correct keyword was successfully recovered.
+
+These examples illustrate how speech enhancement improves
+noise robustness and enables more reliable keyword
+recognition.
+
+</p>
+
+
+<section>
+
+<h2>Example 1</h2>
+
+<div class="example-meta">
+
+True Word: four | Noisy Prediction: no | Enhanced Prediction: four |
+
+Noise: Cat Meowing | SNR: 2.5 dB
+
+</div>
+
+<div class="result-line">
+
+Noisy Prediction:
+
+<span class="bad">
+no
+</span>
+
+&nbsp;&nbsp;&nbsp;&nbsp;
+
+Enhanced Prediction:
+
+<span class="good">
+four
+</span>
+
+</div>
+
+<div class="example-grid">
+
+<div class="card">
+
+<h3>Noisy Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_01/noisy.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_01/noisy_spectrogram.png">
+
+</div>
+
+<div class="card">
+
+<h3>Enhanced Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_01/enhanced.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_01/enhanced_spectrogram.png">
+
+</div>
+
+</div>
+
+</section>
+
+<section>
+
+<h2>Example 2</h2>
+
+<div class="example-meta">
+
+True Word: off | Noisy Prediction: on | Enhanced Prediction: off |
+
+Noise: Exercise Bike | SNR: 7.5 dB
+
+</div>
+
+<div class="result-line">
+
+Noisy Prediction:
+
+<span class="bad">
+on
+</span>
+
+&nbsp;&nbsp;&nbsp;&nbsp;
+
+Enhanced Prediction:
+
+<span class="good">
+off
+</span>
+
+</div>
+
+<div class="example-grid">
+
+<div class="card">
+
+<h3>Noisy Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_02/noisy.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_02/noisy_spectrogram.png">
+
+</div>
+
+<div class="card">
+
+<h3>Enhanced Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_02/enhanced.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_02/enhanced_spectrogram.png">
+
+</div>
+
+</div>
+
+</section>
+
+<section>
+
+<h2>Example 3</h2>
+
+<div class="example-meta">
+
+True Word: tree | Noisy Prediction: two | Enhanced Prediction: tree |
+
+Noise: Dishwashing | SNR: 2.5 dB
+
+</div>
+
+<div class="result-line">
+
+Noisy Prediction:
+
+<span class="bad">
+two
+</span>
+
+&nbsp;&nbsp;&nbsp;&nbsp;
+
+Enhanced Prediction:
+
+<span class="good">
+tree
+</span>
+
+</div>
+
+<div class="example-grid">
+
+<div class="card">
+
+<h3>Noisy Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_03/noisy.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_03/noisy_spectrogram.png">
+
+</div>
+
+<div class="card">
+
+<h3>Enhanced Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_03/enhanced.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_03/enhanced_spectrogram.png">
+
+</div>
+
+</div>
+
+</section>
+
+<section>
+
+<h2>Example 4</h2>
+
+<div class="example-meta">
+
+True Word: go | Noisy Prediction: dog | Enhanced Prediction: go |
+
+Noise: Doing the Dishes | SNR: 2.5 dB
+
+</div>
+
+<div class="result-line">
+
+Noisy Prediction:
+
+<span class="bad">
+dog
+</span>
+
+&nbsp;&nbsp;&nbsp;&nbsp;
+
+Enhanced Prediction:
+
+<span class="good">
+go
+</span>
+
+</div>
+
+<div class="example-grid">
+
+<div class="card">
+
+<h3>Noisy Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_04/noisy.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_04/noisy_spectrogram.png">
+
+</div>
+
+<div class="card">
+
+<h3>Enhanced Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_04/enhanced.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_04/enhanced_spectrogram.png">
+
+</div>
+
+</div>
+
+</section>
+
+<section>
+
+<h2>Example 5</h2>
+
+<div class="example-meta">
+
+True Word: bird | Noisy Prediction: bed | Enhanced Prediction: bird |
+
+Noise: Exercise Bike | SNR: 7.5 dB
+
+</div>
+
+<div class="result-line">
+
+Noisy Prediction:
+
+<span class="bad">
+bed
+</span>
+
+&nbsp;&nbsp;&nbsp;&nbsp;
+
+Enhanced Prediction:
+
+<span class="good">
+bird
+</span>
+
+</div>
+
+<div class="example-grid">
+
+<div class="card">
+
+<h3>Noisy Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_05/noisy.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_05/noisy_spectrogram.png">
+
+</div>
+
+<div class="card">
+
+<h3>Enhanced Speech</h3>
+
+<audio controls>
+<source src="demo_assets/example_05/enhanced.wav" type="audio/wav">
+</audio>
+
+<img src="demo_assets/example_05/enhanced_spectrogram.png">
+
+</div>
+
+</div>
+
+</section>
+
+
+<footer>
+
+KWS Enhancement Demo<br>
+DS-CNN + Speech Enhancement (SGMSE)
+
+</footer>
+
+</body>
+</html>

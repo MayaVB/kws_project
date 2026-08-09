@@ -315,7 +315,7 @@ def run(cfg: dict):
             best_model, loader, device=device, return_meta=True
         )
 
-        """
+        
         # SAVE MISCLASSIFICATIONS FOR GRADIO
         pred_df, mis_df = save_prediction_reports(
             t=t,
@@ -327,7 +327,7 @@ def run(cfg: dict):
             snr=snr,
             noise=noise
         )
-        """
+        
 
         eval_time = time.time() - eval_start
 
@@ -408,6 +408,7 @@ def run(cfg: dict):
     noisy_root=noisy_root,
     enhanced_versions=enhanced_versions,
     idx_vis=8,
+    run_dir=run_dir
     )
 
     # =====================================
@@ -442,7 +443,7 @@ def run(cfg: dict):
     print("===================================\n")
 
     with open(run_dir / "runtime_report.txt", "a") as f:
-        f.write(f"\nTOTAL PROGRAM TIME: {total_time:.2f} sec\n")
+        f.write(f"\nTOTAL PROGRAM TIME: {total_time/60:.2f} minutes\n")
 
 
 if __name__ == "__main__":

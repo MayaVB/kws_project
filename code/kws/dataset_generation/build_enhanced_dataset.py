@@ -39,14 +39,15 @@ CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/checkpoints/train_
 OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
 
 # trained
-MODE = "trained_ep149_ft"
+MODE = "trained_ft_ep99"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/t8xf51rt/epoch=99-last.ckpt"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/j042jm5h/epoch=163-last.ckpt"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epochepoch=149.ckpt"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=166-si_sir=46.72.ckpt"
-CKPT_PATH ="/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/zd9dcd3i-kws_exp_10_fine_lr1e5/epochepoch=149.ckpt"
+# CKPT_PATH ="/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/zd9dcd3i-kws_exp_10_fine_lr1e5/epochepoch=149.ckpt"
 # CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt"
+CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/2yte2tlp-kws_exp_13_ft_last2_wd/epochepoch=99.ckpt"
 
 OUTPUT_ROOT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_new/{MODE}"
 META_OUT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_{MODE}_new_metadata.csv"

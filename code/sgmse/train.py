@@ -88,15 +88,7 @@ if __name__ == '__main__':
           )
           model.load_state_dict(checkpoint["state_dict"], strict=False)
 
-     """
-     # fine-tuning mode: freeze DNN parameters and only train the SDE parameters (if any)
-     print("\nDEBUG: MODEL PARAMETER NAMES\n")
-     with open("layers.txt", "w") as f:
-          for name, param in model.dnn.named_parameters():
-               f.write(name + "\n")
-
-     exit()
-     """
+     
      # FREEZE EVERYTHING
      for param in model.dnn.parameters():
           param.requires_grad = False
@@ -105,17 +97,11 @@ if __name__ == '__main__':
      for name, param in model.dnn.named_parameters():
           if (
                "output_layer" in name
-               or "all_modules.70" in name
-               or "all_modules.71" in name
-               or "all_modules.72" in name
-               or "all_modules.73" in name
-               or "all_modules.74" in name
-               or "all_modules.75" in name
-               or "all_modules.76" in name
-          ):
+               or any(f"all_modules.{i}" in name for i in range(60, 77))
+               ):
                param.requires_grad = True
                print(f"TRAINABLE: {name}")
-
+     
      total_params = sum(p.numel() for p in model.parameters())
      trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
      print("\n===================================")
@@ -123,6 +109,15 @@ if __name__ == '__main__':
      print(f"Trainable params: {trainable_params:,}")
      print( f"Trainable ratio: " f"{100 * trainable_params / total_params:.2f}%")
      print("===================================\n")
+
+     """
+     # freeze batch norm layers
+     for module in model.dnn.modules():
+          if isinstance(module, torch.nn.BatchNorm2d) or isinstance(module, torch.nn.BatchNorm1d):
+               module.eval()
+               for param in module.parameters():
+                    param.requires_grad = False
+     """
 
      # Set up logger configuration
      if args.nolog:
