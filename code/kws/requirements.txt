@@ -1,4 +1,3 @@
-denoiser
 kagglehub
 librosa
 matplotlib
