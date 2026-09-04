@@ -23,6 +23,7 @@ def analyze_mode(
     b,
     df_test_audio,
     sampling_rate,
+    noisy_root,
     enhanced_root=None,
 ):
     """
@@ -110,6 +111,7 @@ def analyze_mode(
             df_test_audio=df_test_audio,
             sampling_rate=sampling_rate,
             run_dir=run_dir,
+            noisy_root=noisy_root,
             enhanced_root=enhanced_root,
             tag=mode.upper()
         )

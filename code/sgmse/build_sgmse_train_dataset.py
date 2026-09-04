@@ -1,18 +1,26 @@
+import argparse
 import os
 import shutil
+
 from tqdm import tqdm
 
-# PATHS
-CLEAN_ROOT = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
-NOISY_TRAIN_ROOT = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/train"
-NOISY_VAL_ROOT   = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/val"
-OUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/train_sgmse"
 
-# COPY FUNCTION
-def copy_split(noisy_root, subset_name):
+def parse_args():
+    parser = argparse.ArgumentParser(description="Build paired clean/noisy train and validation data for SGMSE.")
+    parser.add_argument("--clean_root", type=str, required=True, help="Root directory of the clean Speech Commands dataset.",)
+    parser.add_argument("--noisy_root", type=str, required=True,
+        help=(
+            "Root directory of the noisy dataset containing "
+            "train/ and val/ subdirectories."
+        ),)
+    parser.add_argument("--output_root", type=str, required=True, help="Output directory for the paired SGMSE dataset.",)
+    return parser.parse_args()
 
-    clean_out = os.path.join(OUT_ROOT, subset_name, "clean")
-    noisy_out = os.path.join(OUT_ROOT, subset_name, "noisy")
+
+def copy_split(clean_root, noisy_root, output_root, subset_name):
+
+    clean_out = os.path.join(output_root, subset_name, "clean")
+    noisy_out = os.path.join(output_root, subset_name, "noisy")
 
     os.makedirs(clean_out, exist_ok=True)
     os.makedirs(noisy_out, exist_ok=True)
@@ -21,12 +29,15 @@ def copy_split(noisy_root, subset_name):
 
     for label in os.listdir(noisy_root):
         noisy_label_dir = os.path.join(noisy_root, label)
-        clean_label_dir = os.path.join(CLEAN_ROOT, label)
+        clean_label_dir = os.path.join(clean_root, label)
 
         if not os.path.isdir(noisy_label_dir):
             continue
 
-        for fname in tqdm(os.listdir(noisy_label_dir), desc=f"{subset_name}-{label}"):
+        for fname in tqdm(
+            os.listdir(noisy_label_dir),
+            desc=f"{subset_name}-{label}",
+        ):
 
             if not fname.endswith(".wav"):
                 continue
@@ -35,33 +46,55 @@ def copy_split(noisy_root, subset_name):
             clean_path = os.path.join(clean_label_dir, fname)
 
             if not os.path.exists(clean_path):
-                print(f"⚠ Missing clean file: {clean_path}")
+                print(f"Missing clean file: {clean_path}")
                 continue
 
-            # copy noisy
-            shutil.copy2(noisy_path, os.path.join(noisy_out, fname))
+            shutil.copy2(
+                noisy_path,
+                os.path.join(noisy_out, fname),
+            )
 
-            # copy clean
-            shutil.copy2(clean_path, os.path.join(clean_out, fname))
+            shutil.copy2(
+                clean_path,
+                os.path.join(clean_out, fname),
+            )
 
             total_files += 1
 
-    print(f"✔ {subset_name}: {total_files} files copied")
+    print(f"{subset_name}: {total_files} files copied")
 
 
-# MAIN
 def main():
+    args = parse_args()
+
+    clean_root = os.path.abspath(
+        os.path.expanduser(args.clean_root)
+    )
+    noisy_root = os.path.abspath(
+        os.path.expanduser(args.noisy_root)
+    )
+    output_root = os.path.abspath(
+        os.path.expanduser(args.output_root)
+    )
 
     print("\nBuilding SGMSE dataset...\n")
 
-    # TRAIN
-    copy_split(NOISY_TRAIN_ROOT, "train")
+    copy_split(
+        clean_root,
+        os.path.join(noisy_root, "train"),
+        output_root,
+        "train",
+    )
 
-    # VALID
-    copy_split(NOISY_VAL_ROOT, "valid")
+    copy_split(
+        clean_root,
+        os.path.join(noisy_root, "val"),
+        output_root,
+        "valid",
+    )
 
-    print("\n✅ Done! Dataset ready at:")
-    print(OUT_ROOT)
+    print("\nDone! Dataset ready at:")
+    print(output_root)
 
 
 if __name__ == "__main__":

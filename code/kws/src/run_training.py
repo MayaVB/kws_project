@@ -33,6 +33,7 @@ Outputs
 from __future__ import annotations
 import sys
 import os
+import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import time
 import joblib
@@ -264,14 +265,6 @@ def run(cfg: dict):
         # CLEAN
         if mode_type == "clean":
             loader = test_loader_clean
-            loss, acc, t, p, f, *_ = evaluate_loader(
-                best_model,
-                loader,
-                device=device,
-                return_meta=True
-            )
-            snr = None
-            noise = None
 
         # NOISY
         elif mode_type == "noisy":
@@ -371,6 +364,7 @@ def run(cfg: dict):
             b=b,
             df_test_audio=df_test_audio,
             sampling_rate=sampling_rate,
+            noisy_root=os.path.join(noisy_root, "test"),
             enhanced_root=(mode_cfg["root"] if mode_type == "enhanced" else None)
         )
         if metrics_dict is not None:
@@ -446,7 +440,26 @@ def run(cfg: dict):
         f.write(f"\nTOTAL PROGRAM TIME: {total_time/60:.2f} minutes\n")
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train and evaluate the DS-CNN keyword spotting model.")
+    parser.add_argument("--config", type=str, default=None,
+        help=(
+            "Path to the YAML configuration file. "
+            "Defaults to new_config.yaml in the KWS directory."
+        ),)
+
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    cfg_path = Path(__file__).resolve().parents[1] / "new_config.yaml"
+    args = parse_args()
+
+    if args.config is None:
+        cfg_path = Path(__file__).resolve().parents[1] / "new_config.yaml"
+    else:
+        cfg_path = Path(args.config).expanduser().resolve()
+
+    print(f"Using configuration: {cfg_path}")
+
     cfg = load_config(cfg_path)
     run(cfg)

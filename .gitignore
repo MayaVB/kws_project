@@ -1,7 +1,3 @@
-# Python
-__pycache__/
-*.pyc
-
 # Virtual environments
 .venv/
 env/
@@ -52,5 +48,14 @@ code/sgmse/test_data/
 tmp/
 tmp_*
 
-# Personal 
-avital_cheatsheet.txt
+# Local configuration and personal notes
+code/kws/new_config.yaml
+code/kws/avital_cheatsheet.txt
+
+# Experimental scripts not included in the final pipeline
+code/kws/denoiser/noise_onthefly_dataset.py
+code/kws/dataset_generation/build_reverb_dataset.py
+
+# Python cache
+__pycache__/
+*.py[cod]

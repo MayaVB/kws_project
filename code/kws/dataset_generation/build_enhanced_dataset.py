@@ -1,8 +1,7 @@
 """
 build_enhanced_dataset.py
 
-Generate an enhanced speech dataset using
-a pretrained SGMSE model.
+Generate an enhanced speech dataset using an SGMSE checkpoint.
 
 Pipeline:
 1. Load noisy speech files
@@ -10,143 +9,212 @@ Pipeline:
 3. Save enhanced files
 4. Generate synchronized metadata CSV
 
-This script is intended for dataset generation
-and is not part of the training/evaluation pipeline.
+The script can be resumed: files that already exist in the output
+directory are skipped.
 """
+
+import argparse
 import os
-import subprocess
-import pandas as pd
-import time
-from multiprocessing import Pool
-from math import ceil
 import shutil
-
-# ================= CONFIG ================= #
-
-BASE_DIR = "/home/dsi/skopavi/Project/kws_project"
-CHUNK_SIZE = 10
-N_WORKERS = 1
-TMP_ROOT = "/tmp/enhanced_chunks"
-
-INPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
-
-META_IN = "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
-
-# ================= MODE SWITCH ================= #
-
-# pretrained
-CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt"
-OUTPUT_ROOT = "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/pretrained"
-
-# trained
-MODE = "trained_ft_ep99"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/code/sgmse/lightning_logs/version_5/checkpoints/epoch=9-step=15370.ckpt"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/t8xf51rt/epoch=99-last.ckpt"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/j042jm5h/epoch=163-last.ckpt"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epochepoch=149.ckpt"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=166-si_sir=46.72.ckpt"
-# CKPT_PATH ="/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/zd9dcd3i-kws_exp_10_fine_lr1e5/epochepoch=149.ckpt"
-# CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt"
-CKPT_PATH = "/home/dsi/skopavi/Project/kws_project/experiments/sgmse_logs/2yte2tlp-kws_exp_13_ft_last2_wd/epochepoch=99.ckpt"
-
-OUTPUT_ROOT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_new/{MODE}"
-META_OUT = f"/home/dsi/skopavi/Project/kws_project/data/enhanced_{MODE}_new_metadata.csv"
-
-# ========================================= #
-
-os.makedirs(OUTPUT_ROOT, exist_ok=True)
-os.makedirs(TMP_ROOT, exist_ok=True)
-
-meta_df = pd.read_csv(META_IN)
-meta_df = meta_df[meta_df["split"] == "test"]   
-
-meta_lookup = {
-    (row["label"], row["filename"]): row
-    for _, row in meta_df.iterrows()
-}
+import subprocess
+import sys
+import time
+from math import ceil
+from multiprocessing import Pool
+from pathlib import Path
+import pandas as pd
 
 
 # =====================================================
+# ARGUMENTS
+# =====================================================
+
+def parse_args():
+    default_sgmse_script = (Path(__file__).resolve().parents[2] / "sgmse" / "enhancement.py")
+    parser = argparse.ArgumentParser(description="Generate an enhanced dataset using an SGMSE checkpoint.")
+    parser.add_argument("--input_root", type=str, required=True, help="Directory containing the noisy test dataset.",)
+    parser.add_argument("--metadata", type=str, required=True, help="Metadata CSV corresponding to the noisy dataset.",)
+    parser.add_argument("--ckpt", type=str, required=True, help="Path to the SGMSE checkpoint.",)
+    parser.add_argument("--output_root", type=str, required=True, help="Directory in which enhanced audio files will be saved.",)
+    parser.add_argument("--output_metadata", type=str, required=True, help="Path for saving the enhanced dataset metadata CSV.",)
+    parser.add_argument("--sgmse_script", type=str, default=str(default_sgmse_script), help="Path to the SGMSE enhancement.py script.",)
+    parser.add_argument("--device", type=str, default="cuda", help="Device used for SGMSE inference (default: cuda).",)
+    parser.add_argument("--chunk_size", type=int, default=10,  help="Number of files enhanced per SGMSE call (default: 10).",)
+    parser.add_argument("--n_workers", type=int, default=1, help="Number of parallel workers (default: 1).",)
+    parser.add_argument("--tmp_root",  type=str, default="/tmp/enhanced_chunks", help="Directory for temporary enhancement files.",)
+    return parser.parse_args()
+
+
+# GLOBAL WORKER CONFIGURATION
+CONFIG = {}
+META_LOOKUP = {}
+
+def init_worker(config, meta_lookup):
+    global CONFIG, META_LOOKUP
+    CONFIG = config
+    META_LOOKUP = meta_lookup
+
+
 # WORKER
-# =====================================================
-def process_chunk(args):
-    folder, files = args
+def process_chunk(task):
+    folder, files = task
 
-    tmp_in = os.path.join(TMP_ROOT, f"in_{os.getpid()}")
-    tmp_out = os.path.join(TMP_ROOT, f"out_{os.getpid()}")
+    input_root = CONFIG["input_root"]
+    output_root = CONFIG["output_root"]
+    tmp_root = CONFIG["tmp_root"]
+
+    tmp_in = os.path.join(tmp_root, f"in_{os.getpid()}")
+    tmp_out = os.path.join(tmp_root, f"out_{os.getpid()}")
 
     os.makedirs(tmp_in, exist_ok=True)
     os.makedirs(tmp_out, exist_ok=True)
 
-    # copy
-    for f in files:
-        src = os.path.join(INPUT_ROOT, folder, f)
-        dst = os.path.join(tmp_in, f)
-        shutil.copy2(src, dst)
+    try:
+        # Copy the current chunk into a temporary input directory
+        for filename in files:
+            src = os.path.join(input_root, folder, filename)
+            dst = os.path.join(tmp_in, filename)
+            shutil.copy2(src, dst)
 
-    # run model
-    cmd = f"""
-    python {BASE_DIR}/code/sgmse/enhancement.py \
-        --test_dir {tmp_in} \
-        --enhanced_dir {tmp_out} \
-        --ckpt {CKPT_PATH} \
-        --device cuda
-    """
-    subprocess.run(cmd, shell=True)
+        # Run SGMSE enhancement
+        cmd = [
+            sys.executable,
+            CONFIG["sgmse_script"],
+            "--test_dir",
+            tmp_in,
+            "--enhanced_dir",
+            tmp_out,
+            "--ckpt",
+            CONFIG["ckpt"],
+            "--device",
+            CONFIG["device"],
+        ]
 
-    meta_rows = []
+        subprocess.run(cmd, check=True)
 
-    for f in files:
-        src = os.path.join(tmp_out, f)
-        dst = os.path.join(OUTPUT_ROOT, folder, f)
+        metadata_rows = []
 
-        if os.path.exists(src):
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.move(src, dst)
+        # Move enhanced files to the final dataset directory
+        for filename in files:
+            src = os.path.join(tmp_out, filename)
+            dst = os.path.join(output_root, folder, filename)
 
-            key = (folder, f)
-            row = meta_lookup.get(key)
+            if os.path.exists(src):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.move(src, dst)
 
-            if row is not None:
-                meta_rows.append(row)
+                key = (folder, filename)
+                row = META_LOOKUP.get(key)
+
+                if row is not None:
+                    metadata_rows.append(row)
+                else:
+                    print(f"Warning: metadata not found for {key}")
             else:
-                print(f"⚠ Warning: Metadata not found for {key}")
-        else:
-            print(f"⚠ Warning: Enhanced file not found for {f}")
+                print(f"Warning: enhanced file not found for {filename}")
 
-    # cleanup
-    shutil.rmtree(tmp_in)
-    shutil.rmtree(tmp_out)
+        return metadata_rows
 
-    return meta_rows
+    finally:
+        # Always remove temporary directories
+        shutil.rmtree(tmp_in, ignore_errors=True)
+        shutil.rmtree(tmp_out, ignore_errors=True)
 
 
-# =====================================================
-# MAIN
-# =====================================================
-def build():
+# DATASET BUILD
+def build(args):
+    input_root = os.path.abspath(args.input_root)
+    output_root = os.path.abspath(args.output_root)
+    metadata_path = os.path.abspath(args.metadata)
+    output_metadata = os.path.abspath(args.output_metadata)
+    ckpt = os.path.abspath(args.ckpt)
+    sgmse_script = os.path.abspath(args.sgmse_script)
+    tmp_root = os.path.abspath(args.tmp_root)
+
+    # Basic path validation
+    if not os.path.isdir(input_root):
+        raise FileNotFoundError(f"Input dataset directory not found: {input_root}")
+
+    if not os.path.isfile(metadata_path):
+        raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+
+    if not os.path.isfile(ckpt):
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
+
+    if not os.path.isfile(sgmse_script):
+        raise FileNotFoundError(f"SGMSE enhancement script not found: {sgmse_script}")
+
+    os.makedirs(output_root, exist_ok=True)
+    os.makedirs(tmp_root, exist_ok=True)
+
+    output_metadata_dir = os.path.dirname(output_metadata)
+    if output_metadata_dir:
+        os.makedirs(output_metadata_dir, exist_ok=True)
+
+    # -------------------------------------------------
+    # Load metadata
+    # -------------------------------------------------
+
+    meta_df = pd.read_csv(metadata_path)
+
+    # The input_root contains the noisy test set.
+    if "split" in meta_df.columns:
+        meta_df = meta_df[meta_df["split"] == "test"]
+
+    meta_lookup = {
+        (row["label"], row["filename"]): row
+        for _, row in meta_df.iterrows()
+    }
+
+    config = {
+        "input_root": input_root,
+        "output_root": output_root,
+        "tmp_root": tmp_root,
+        "sgmse_script": sgmse_script,
+        "ckpt": ckpt,
+        "device": args.device,
+    }
+
+    # -------------------------------------------------
+    # Dataset status
+    # -------------------------------------------------
+
+    print("\n========== CONFIGURATION ==========")
+    print(f"Input dataset:   {input_root}")
+    print(f"Checkpoint:      {ckpt}")
+    print(f"Output dataset:  {output_root}")
+    print(f"Output metadata: {output_metadata}")
+    print(f"Device:          {args.device}")
+    print(f"Chunk size:      {args.chunk_size}")
+    print(f"Workers:         {args.n_workers}")
 
     print("\n========== DATASET STATUS ==========")
+
+    folders = sorted(
+        folder
+        for folder in os.listdir(input_root)
+        if os.path.isdir(os.path.join(input_root, folder))
+    )
 
     total_all = 0
     done_all = 0
 
-    folder_stats = []
-
-    folders = sorted([
-        f for f in os.listdir(INPUT_ROOT)
-        if os.path.isdir(os.path.join(INPUT_ROOT, f))
-    ])
-
     for folder in folders:
-        in_dir = os.path.join(INPUT_ROOT, folder)
-        out_dir = os.path.join(OUTPUT_ROOT, folder)
+        in_dir = os.path.join(input_root, folder)
+        out_dir = os.path.join(output_root, folder)
 
-        all_files = [f for f in os.listdir(in_dir) if f.endswith(".wav")]
+        all_files = [
+            f for f in os.listdir(in_dir)
+            if f.endswith(".wav")
+        ]
+
         done_files = []
 
         if os.path.exists(out_dir):
-            done_files = [f for f in os.listdir(out_dir) if f.endswith(".wav")]
+            done_files = [
+                f for f in os.listdir(out_dir)
+                if f.endswith(".wav")
+            ]
 
         total = len(all_files)
         done = len(done_files)
@@ -155,33 +223,55 @@ def build():
         total_all += total
         done_all += done
 
-        folder_stats.append((folder, total, done, remaining))
+        progress = 100 * done / total if total else 0.0
 
-        print(f"{folder:15} | {done}/{total} ({100*done/total:.1f}%) | remaining: {remaining}")
+        print(
+            f"{folder:15} | "
+            f"{done}/{total} ({progress:.1f}%) | "
+            f"remaining: {remaining}"
+        )
+
+    print(
+        f"\nOverall: {done_all}/{total_all} "
+        f"({100 * done_all / total_all if total_all else 0:.1f}%)"
+    )
+
+    # -------------------------------------------------
+    # Build
+    # -------------------------------------------------
+
     print("\n========== START BUILD ==========")
 
     global_start = time.time()
 
     for folder in folders:
-
         folder_start = time.time()
 
-        in_dir = os.path.join(INPUT_ROOT, folder)
-        out_dir = os.path.join(OUTPUT_ROOT, folder)
+        in_dir = os.path.join(input_root, folder)
+        out_dir = os.path.join(output_root, folder)
 
         os.makedirs(out_dir, exist_ok=True)
 
-        all_files = [f for f in os.listdir(in_dir) if f.endswith(".wav")]
-        done_files = [f for f in os.listdir(out_dir) if f.endswith(".wav")]
+        all_files = [
+            f for f in os.listdir(in_dir)
+            if f.endswith(".wav")
+        ]
+
+        done_files = [
+            f for f in os.listdir(out_dir)
+            if f.endswith(".wav")
+        ]
 
         total = len(all_files)
         done = len(done_files)
 
         print(f"\n=== {folder} ===")
-        print(f"Progress: {done}/{total} ({100*done/total:.1f}%)")
+
+        progress = 100 * done / total if total else 0.0
+        print(f"Progress: {done}/{total} ({progress:.1f}%)")
 
         if done == total:
-            print("✔ Already done")
+            print("Already done")
             continue
 
         remaining_files = [
@@ -189,73 +279,115 @@ def build():
             if not os.path.exists(os.path.join(out_dir, f))
         ]
 
-        total_chunks = ceil(len(remaining_files) / CHUNK_SIZE)
+        total_chunks = ceil(
+            len(remaining_files) / args.chunk_size
+        )
 
         print(f"Remaining files: {len(remaining_files)}")
-        print(f"Chunks: {total_chunks} (each {CHUNK_SIZE} files)\n")
+        print(
+            f"Chunks: {total_chunks} "
+            f"(up to {args.chunk_size} files each)\n"
+        )
 
-        # build chunks
         folder_tasks = []
-        for i in range(0, len(remaining_files), CHUNK_SIZE):
-            chunk = remaining_files[i:i + CHUNK_SIZE]
+
+        for i in range(
+            0,
+            len(remaining_files),
+            args.chunk_size,
+        ):
+            chunk = remaining_files[
+                i:i + args.chunk_size
+            ]
             folder_tasks.append((folder, chunk))
 
-        # run with progress
         processed_chunks = 0
-        all_rows = []
 
-        with Pool(N_WORKERS) as p:
-            for result in p.imap(process_chunk, folder_tasks):
+        with Pool(
+            args.n_workers,
+            initializer=init_worker,
+            initargs=(config, meta_lookup),
+        ) as pool:
+
+            for _ in pool.imap(
+                process_chunk,
+                folder_tasks,
+            ):
                 processed_chunks += 1
-                all_rows.extend(result)
 
-                # progress calc
                 elapsed = time.time() - folder_start
                 avg_time = elapsed / processed_chunks
-                remaining = total_chunks - processed_chunks
-                eta = remaining * avg_time
+
+                remaining_chunks = (
+                    total_chunks - processed_chunks
+                )
+                eta = remaining_chunks * avg_time
+
+                processed_files = min(
+                    processed_chunks * args.chunk_size,
+                    len(remaining_files),
+                )
 
                 print(
                     f"[{folder}] "
                     f"{processed_chunks}/{total_chunks} chunks "
-                    f"({processed_chunks*CHUNK_SIZE}/{len(remaining_files)} files) | "
-                    f"ETA: {eta/60:.1f} min"
+                    f"({processed_files}/{len(remaining_files)} files) | "
+                    f"ETA: {eta / 60:.1f} min"
                 )
 
         folder_time = time.time() - folder_start
-        print(f"✔ Finished {folder} in {folder_time/60:.1f} min")
+        print(
+            f"Finished {folder} "
+            f"in {folder_time / 60:.1f} min"
+        )
 
-    # =====================================================
-    # FINAL METADATA
-    # =====================================================
+    # -------------------------------------------------
+    # Final metadata synchronization
+    # -------------------------------------------------
+
     print("\nFinal metadata sync...")
 
     valid_rows = []
 
     for _, row in meta_df.iterrows():
         label = row["label"]
-        fname = row["filename"]
+        filename = row["filename"]
 
-        path = os.path.join(OUTPUT_ROOT, label, fname)
+        enhanced_path = os.path.join(
+            output_root,
+            label,
+            filename,
+        )
 
-        if os.path.exists(path):
+        if os.path.exists(enhanced_path):
             valid_rows.append(row)
 
     if len(valid_rows) == 0:
-        print("WARNING: No files found!")
+        print("Warning: no enhanced files were found.")
 
     final_df = pd.DataFrame(valid_rows)
-    final_df = final_df.drop_duplicates(subset=["label", "filename"])
-    final_df.to_csv(META_OUT, index=False)
+
+    if not final_df.empty:
+        final_df = final_df.drop_duplicates(
+            subset=["label", "filename"]
+        )
+
+    final_df.to_csv(
+        output_metadata,
+        index=False,
+    )
 
     total_time = time.time() - global_start
 
     print(f"\nFinal metadata size: {len(final_df)}")
-    print(f"Total runtime: {total_time/60:.1f} minutes")
-
+    print(f"Total runtime: {total_time / 60:.1f} minutes")
     print("\n========== DONE ==========\n")
 
 
-# =====================================================
+def main():
+    args = parse_args()
+    build(args)
+
+
 if __name__ == "__main__":
-    build()
+    main()

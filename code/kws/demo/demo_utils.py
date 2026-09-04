@@ -248,25 +248,3 @@ def compare_prediction_modes(
         f"Degraded   : {len(degraded)}"
     )
     """
-
-def build_audio_paths(
-    filename,
-    label
-):
-    clean_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/raw/data_new/{label}/{filename}"
-    )
-
-    noisy_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/noisy_new/test/{label}/{filename}"
-    )
-
-    enhanced_path = (
-        f"/home/dsi/skopavi/Project/kws_project/"
-        f"data/enhanced_new/trained_ep176/"
-        f"{label}/{filename}"
-    )
-
-    return clean_path, noisy_path, enhanced_path

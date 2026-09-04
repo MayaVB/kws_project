@@ -13,116 +13,142 @@ Pipeline:
 This script is intended for dataset creation
 and is not part of the training/evaluation pipeline.
 """
+
+import argparse
 import os
-import pandas as pd
-import librosa
-import soundfile as sf
 import random
-from tqdm import tqdm
+import librosa
+import pandas as pd
+import soundfile as sf
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 from noise_utils import mix_with_noise_at_snr
 
-clean_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"
-noise_root = "/home/dsi/skopavi/Project/kws_project/data/raw/data_new/_background_noise_"
 
-output_root = "/home/dsi/skopavi/Project/kws_project/data/noisy_new"
-meta_path = "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv"
-
-os.makedirs(output_root, exist_ok=True)
-
-# load noise bank
-noise_files = [f for f in os.listdir(noise_root) if f.endswith(".wav")]
-noise_bank = {}
-
-for f in noise_files:
-    name = os.path.splitext(f)[0]
-    y, _ = librosa.load(os.path.join(noise_root, f), sr=16000)
-    noise_bank[name] = y
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate a noisy Google Speech Commands dataset.")
+    parser.add_argument("--clean_root", type=str, required=True, help="Path to the Google Speech Commands dataset directory.",)
+    parser.add_argument("--output_root", type=str, required=True, help="Directory in which the noisy dataset will be created.",)
+    parser.add_argument("--meta_path", type=str,  required=True,  help="Path for saving the generated metadata CSV file.",)
+    return parser.parse_args()
 
 
-# build noisy dataset and metadata
-rows = []
+def main():
+    args = parse_args()
 
-all_files = []
+    clean_root = args.clean_root
+    output_root = args.output_root
+    meta_path = args.meta_path
 
-folders = [f for f in os.listdir(clean_root)
-           if os.path.isdir(os.path.join(clean_root, f))
-           and f != "_background_noise_"]
+    # Google Speech Commands background-noise directory
+    noise_root = os.path.join(clean_root, "_background_noise_")
 
-folders = sorted(folders)  # ensure consistent order
+    os.makedirs(output_root, exist_ok=True)
 
-for label in folders:
-    in_dir = os.path.join(clean_root, label)
-    files = [f for f in os.listdir(in_dir) if f.endswith(".wav")]
+    # Load noise bank
+    noise_files = [f for f in os.listdir(noise_root) if f.endswith(".wav")]
+    noise_bank = {}
 
-    for fname in files:
-        all_files.append((label, fname))
+    for f in noise_files:
+        name = os.path.splitext(f)[0]
+        y, _ = librosa.load( os.path.join(noise_root, f), sr=16000)
+        noise_bank[name] = y
 
-# SPLIT 
-train_files, valtest_files = train_test_split(
-    all_files, test_size=0.2, random_state=42
-)
+    # ----------------------------------------------------------
+    # Collect clean speech files
+    # ----------------------------------------------------------
+    all_files = []
 
-val_files, test_files = train_test_split(
-    valtest_files, test_size=0.5, random_state=42
-)
+    folders = [
+        f for f in os.listdir(clean_root)
+        if os.path.isdir(os.path.join(clean_root, f))
+        and f != "_background_noise_"
+    ]
 
-print(f"Train: {len(train_files)}")
-print(f"Val:   {len(val_files)}")
-print(f"Test:  {len(test_files)}")
+    folders = sorted(folders)
 
-# PROCESS FUNCTION  
-def process(files_list, split_name, snr_choices):
-    """
-    Generate noisy versions of a list of audio files.
+    for label in folders:
+        in_dir = os.path.join(clean_root, label)
 
-    For each sample:
-    - select a random noise source
-    - select a random SNR
-    - mix clean and noise
-    - save noisy waveform
-    - record metadata
-    """
+        files = [ f for f in os.listdir(in_dir) if f.endswith(".wav")]
 
-    for label, fname in tqdm(files_list, desc=f"{split_name}"):
+        for fname in files:
+            all_files.append((label, fname))
 
-        in_path = os.path.join(clean_root, label, fname)
+    # Train / validation / test split
+    train_files, valtest_files = train_test_split(all_files, test_size=0.2, random_state=42)
+    val_files, test_files = train_test_split( valtest_files, test_size=0.5, random_state=42,)
+    print(f"Train: {len(train_files)}")
+    print(f"Val:   {len(val_files)}")
+    print(f"Test:  {len(test_files)}")
 
-        clean, _ = librosa.load(in_path, sr=16000)
+    rows = []
 
-        noise_name = random.choice(list(noise_bank.keys()))
-        noise = noise_bank[noise_name]
+    # Generate noisy samples
+    def process(files_list, split_name, snr_choices):
+        """
+        Generate noisy versions of a list of audio files.
 
-        snr = random.choice(snr_choices)
+        For each sample:
+        - select a random noise source
+        - select a random SNR
+        - mix clean and noise
+        - save noisy waveform
+        - record metadata
+        """
 
-        noisy = mix_with_noise_at_snr(clean, noise, snr)
+        for label, fname in tqdm(files_list, desc=split_name):
 
-        out_dir = os.path.join(output_root, split_name, label)
-        os.makedirs(out_dir, exist_ok=True)
+            in_path = os.path.join(clean_root, label, fname)
+            clean, _ = librosa.load(in_path, sr=16000)
+            noise_name = random.choice(list(noise_bank.keys()))
+            noise = noise_bank[noise_name]
+            snr = random.choice(snr_choices)
+            noisy = mix_with_noise_at_snr(clean, noise, snr)
+            out_dir = os.path.join(output_root, split_name, label)
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, fname)
 
-        out_path = os.path.join(out_dir, fname)
-        sf.write(out_path, noisy, 16000)
+            sf.write(out_path, noisy, 16000)
+            rows.append({
+                "filename": fname,
+                "label": label,
+                "snr": snr,
+                "noise": noise_name,
+                "split": split_name,
+            })
 
-        rows.append({
-            "filename": fname,
-            "label": label,
-            "snr": snr,
-            "noise": noise_name,
-            "split": split_name
-        })
+    # Training and validation:
+    # SNR = 0, 5, 10 dB
+    process(
+        train_files,
+        "train",
+        [0, 5, 10],
+    )
 
-# RUN 
-# TRAIN
-process(train_files, "train", [0, 5, 10])
+    process(
+        val_files,
+        "val",
+        [0, 5, 10],
+    )
 
-# VAL
-process(val_files, "val", [0, 5, 10])
+    # Test:
+    # SNR = 2.5, 7.5, 12.5 dB
+    process(
+        test_files,
+        "test",
+        [2.5, 7.5, 12.5],
+    )
 
-# TEST
-process(test_files, "test", [2.5, 7.5, 12.5])
+    # Save metadata
+    df_meta = pd.DataFrame(rows)
+    df_meta.to_csv(meta_path, index=False)
 
-# SAVE META 
-df_meta = pd.DataFrame(rows)
-df_meta.to_csv(meta_path, index=False)
+    print("Dataset built successfully!")
+    print(f"Noisy dataset: {output_root}")
+    print(f"Metadata:      {meta_path}")
 
-print("✅ Dataset built!")
+
+if __name__ == "__main__":
+    main()

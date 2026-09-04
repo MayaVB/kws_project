@@ -1,26 +1,25 @@
+import argparse
+from pathlib import Path
 import os
 import pandas as pd
 import gradio as gr
 
+
 # =====================================================
-# PATHS
+# ARGUMENTS
 # =====================================================
 
-CSV_PATH = (
-    # "/home/dsi/skopavi/Project/kws_project/outputs"
-    # "/new_runs/2026-06-04_11-33-13_go_no/interesting_examples.csv"
-    # "/home/dsi/skopavi/Project/kws_project/outputs/"
-    # "new_runs/2026-06-01_14-21-49_three_tree_two/interesting_examples.csv"
-    # "/home/dsi/skopavi/Project/kws_project/outputs"
-    # "/new_runs/2026-05-31_20-09-53_bed_bird_cat/interesting_examples.csv"
-    # "/home/dsi/skopavi/Project/kws_project/outputs/new_runs/2026-06-08_12-14-57/interesting_examples.csv"
-    "/home/dsi/skopavi/Project/kws_project/outputs/new_runs/2026-07-07_11-36-05/interesting_examples.csv"
-)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Browse and select interesting KWS examples.")
+    parser.add_argument("--csv", type=str, required=True, help="Path to an interesting_examples.csv file.",)
 
-SAVE_PATH = (
-    "/home/dsi/skopavi/Project/kws_project/code/kws/demo/"
-    "selected_examples.csv"
-)
+    return parser.parse_args()
+
+
+args = parse_args()
+
+CSV_PATH = Path(args.csv).expanduser().resolve()
+SAVE_PATH = Path(__file__).resolve().parent / "selected_examples.csv"
 
 # =====================================================
 # LOAD DATA

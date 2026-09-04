@@ -16,7 +16,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.model_selection import train_test_split
 import torch
 import random
-
+import sys
+from pathlib import Path
 import os
 import shutil
 import subprocess
@@ -194,7 +195,7 @@ def subset_by_idx(arr, idx):
     return np.array(arr, dtype=object)[idx]
 
 
-def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
+def run_calc_metrics(df_test_audio, sampling_rate, run_dir, noisy_root, enhanced_root, tag):
     """
     Run objective speech enhancement metrics.
 
@@ -212,17 +213,12 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
     as a dictionary.
     """
 
-    TMP_ROOT = os.path.join(
-    "/home/dsi/skopavi/Project/kws_project/tmp",
-    f"tmp_metrics_{tag}_{os.getpid()}_{int(time.time())}"
-)
+    TMP_ROOT = os.path.join("/tmp", f"kws_metrics_{tag}_{os.getpid()}_{int(time.time())}",)   
 
     test_dir = os.path.join(TMP_ROOT, "test")
     clean_dir = os.path.join(test_dir, "clean")
     noisy_dir = os.path.join(test_dir, "noisy")
     enhanced_tmp_dir = os.path.join(TMP_ROOT, "enhanced")
-
-    noisy_root = "/home/dsi/skopavi/Project/kws_project/data/noisy_new/test"
 
     # RESET TMP
     # print("[METRICS] Reset TMP...")
@@ -247,6 +243,10 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
         has_noisy = os.path.exists(noisy_src)
         has_enhanced = os.path.exists(enhanced_src)
 
+        if not has_noisy or not has_enhanced:
+            print(f"Skipping incomplete sample: {label}/{fname}")
+            continue
+
         # COPY ONLY VALID FILES
         safe_name = f"{label}__{fname}"
 
@@ -267,12 +267,26 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, enhanced_root, tag):
     # Replace shell command with a direct Python call
     # if calc_metrics.py is converted into a reusable module.
 
-    cmd = f"""
-    python /home/dsi/skopavi/Project/kws_project/code/sgmse/calc_metrics.py \
-        --clean_dir {clean_dir} \
-        --noisy_dir {noisy_dir} \
-        --enhanced_dir {enhanced_tmp_dir}
-    """
+    calc_metrics_script = (
+        Path(__file__).resolve().parents[2]
+        / "sgmse"
+        / "calc_metrics.py"
+    )
+
+    cmd = [
+        sys.executable,
+        str(calc_metrics_script),
+        "--clean_dir", clean_dir,
+        "--noisy_dir", noisy_dir,
+        "--enhanced_dir", enhanced_tmp_dir,
+    ]
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     metrics_start = time.time()
 
