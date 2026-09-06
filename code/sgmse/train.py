@@ -77,47 +77,32 @@ if __name__ == '__main__':
           }
      )
 
-     # freeze
-     if args.ckpt is not None:
-          print(f"\nLoading pretrained weights from: {args.ckpt}\n")
-
-          checkpoint = torch.load(
-               args.ckpt,
-               map_location="cpu",
-               weights_only=False
-          )
-          model.load_state_dict(checkpoint["state_dict"], strict=False)
-
-     
-     # FREEZE EVERYTHING
-     for param in model.dnn.parameters():
-          param.requires_grad = False
-
-     # UNFREEZE LAST BLOCKS
-     for name, param in model.dnn.named_parameters():
-          if (
-               "output_layer" in name
-               or any(f"all_modules.{i}" in name for i in range(60, 77))
-               ):
-               param.requires_grad = True
-               print(f"TRAINABLE: {name}")
-     
-     total_params = sum(p.numel() for p in model.parameters())
-     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-     print("\n===================================")
-     print(f"Total params: {total_params:,}")
-     print(f"Trainable params: {trainable_params:,}")
-     print( f"Trainable ratio: " f"{100 * trainable_params / total_params:.2f}%")
-     print("===================================\n")
-
-     """
-     # freeze batch norm layers
-     for module in model.dnn.modules():
-          if isinstance(module, torch.nn.BatchNorm2d) or isinstance(module, torch.nn.BatchNorm1d):
-               module.eval()
-               for param in module.parameters():
-                    param.requires_grad = False
-     """
+     # -------------------------------------------------------------------------
+     # Optional fine-tuning
+     # -------------------------------------------------------------------------
+     # The default behavior of this script is regular SGMSE training.
+     #
+     # For the fine-tuning configuration used in our experiments:
+     # 1. Load the pretrained weights into `model`.
+     # 2. Freeze all DNN parameters.
+     # 3. Unfreeze `output_layer` and `all_modules.60`-`all_modules.76`.
+     # 4. Use `trainer.fit(model)` instead of
+     #    `trainer.fit(model, ckpt_path=args.ckpt)`.
+     #
+     # Example:
+     #
+     # checkpoint = torch.load(args.ckpt, map_location="cpu", weights_only=False)
+     # model.load_state_dict(checkpoint["state_dict"], strict=False)
+     #
+     # for param in model.dnn.parameters():
+     #     param.requires_grad = False
+     #
+     # for name, param in model.dnn.named_parameters():
+     #     if (
+     #         "output_layer" in name
+     #         or any(f"all_modules.{i}" in name for i in range(60, 77))
+     #     ):
+     #         param.requires_grad = True
 
      # Set up logger configuration
      if args.nolog:
@@ -186,10 +171,6 @@ if __name__ == '__main__':
           callbacks=callbacks
      )
 
-     # Train model
-
-     # regular training
-     # trainer.fit(model, ckpt_path=args.ckpt)
-
-     # freeze
-     trainer.fit(model)
+     # Regular training.
+     # If --ckpt is provided, Lightning resumes training from that checkpoint.
+     trainer.fit(model, ckpt_path=args.ckpt)

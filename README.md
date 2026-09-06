@@ -58,7 +58,7 @@ kws_project/
 │   │
 │   └── sgmse/
 │       ├── sgmse/                # SGMSE implementation
-│       ├── train.py              # SGMSE fine-tuning
+│       ├── train.py              # SGMSE training and optional fine-tuning
 │       ├── enhancement.py        # Speech enhancement
 │       ├── calc_metrics.py       # Enhancement metrics
 │       ├── build_sgmse_train_dataset.py
@@ -136,7 +136,7 @@ The generated dataset contains train, validation, and test subsets.
 
 ## SGMSE Dataset Preparation
 
-To fine-tune SGMSE on the project data, paired clean/noisy training and validation directories are generated using:
+To train or fine-tune SGMSE on the project data, paired clean/noisy training and validation directories are generated using:
 
 ```bash
 python code/sgmse/build_sgmse_train_dataset.py \
@@ -183,32 +183,90 @@ Two enhancement configurations are considered.
 
 ### Pretrained SGMSE
 
-A pretrained SGMSE model trained on VoiceBank-DEMAND is used as the baseline enhancement model.
+A pretrained SGMSE+ model trained on VoiceBank-DEMAND is used as the baseline enhancement model.
 
 ### Project-Trained SGMSE
 
-The pretrained SGMSE model is further fine-tuned using the paired clean/noisy data generated for this project.
+SGMSE can be trained on the paired clean/noisy Google Speech Commands data generated for this project.
 
-The current training script loads a pretrained checkpoint, freezes the majority of the SGMSE network, and fine-tunes the final network blocks.
-
-A typical fine-tuning command is:
+A typical training command is:
 
 ```bash
 python code/sgmse/train.py \
-    --sde ouve \
     --base_dir path/to/sgmse_dataset \
-    --ckpt path/to/pretrained_checkpoint.ckpt \
-    --batch_size 8 \
-    --max_epochs 100 \
-    --wandb_name my_experiment \
-    --log_dir path/to/logs \
-    --accelerator gpu \
-    --devices 1
+    --batch_size 2 \
+    --accumulate_grad_batches 2 \
+    --num_workers 2 \
+    --max_epochs 200 \
+    --backbone ncsnpp \
+    --accelerator cuda \
+    --devices 1 \
+    --num_eval_files 5 \
+    --log_dir path/to/sgmse_logs \
+    --wandb_name kws_experiment
 ```
 
 Training is logged using Weights & Biases unless `--nolog` is specified.
 
 The training pipeline saves periodic checkpoints and can additionally save the best checkpoints according to speech enhancement metrics such as PESQ, ESTOI, SI-SDR, SI-SIR, and SI-SAR.
+
+### Optional Fine-Tuning
+
+The experiments in this project also investigated fine-tuning from the pretrained VoiceBank-DEMAND SGMSE+ checkpoint.
+
+For this configuration, the pretrained checkpoint is loaded as initialization, the majority of the NCSN++ network is frozen, and only the final network blocks (`all_modules.60`–`all_modules.76` and `output_layer`) are updated.
+
+The optional fine-tuning code is included as a commented section in `train.py`. To reproduce this configuration, uncomment the fine-tuning block and use `trainer.fit(model)` instead of the regular `trainer.fit(model, ckpt_path=args.ckpt)` call.
+
+The fine-tuning experiment used:
+
+```bash
+python code/sgmse/train.py \
+    --base_dir path/to/sgmse_dataset \
+    --batch_size 2 \
+    --accumulate_grad_batches 2 \
+    --num_workers 2 \
+    --max_epochs 200 \
+    --backbone ncsnpp \
+    --accelerator cuda \
+    --devices 1 \
+    --num_eval_files 5 \
+    --log_dir path/to/sgmse_logs \
+    --wandb_name kws_finetuning \
+    --lr 1e-5 \
+    --weight_decay 1e-3 \
+    --ckpt path/to/pretrained_checkpoint.ckpt
+```
+
+When `--ckpt` is used with the regular training code, PyTorch Lightning treats it as a checkpoint from which to resume training. For the fine-tuning configuration above, the checkpoint is instead explicitly loaded as initialization before freezing the selected layers.
+
+---
+
+## Checkpoints
+
+Two SGMSE checkpoints are provided/referenced for reproducing the experiments.
+
+### Pretrained SGMSE
+
+The pretrained baseline and fine-tuning initialization use the official SGMSE+ VoiceBank-DEMAND checkpoint provided by the original SGMSE authors.
+
+It can be downloaded using:
+
+```bash
+gdown 1_H3EXvhcYBhOZ9QNUcD5VZHc6ktrRbwQ
+```
+
+See the [official SGMSE repository](https://github.com/sp-uhh/sgmse) for the original model and additional information.
+
+### Project-Trained SGMSE
+
+The selected SGMSE checkpoint obtained using the project data is available on Hugging Face:
+
+**[Download `kws_sgmse_trained.ckpt`](https://huggingface.co/avitalskop/kws-sgmse/blob/main/kws_sgmse_trained.ckpt)**
+
+The checkpoint is not stored directly in this Git repository due to its size.
+
+Alternatively, SGMSE can be trained from scratch or fine-tuned from the pretrained VoiceBank-DEMAND checkpoint using the instructions above.
 
 ---
 
