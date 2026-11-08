@@ -24,6 +24,7 @@ sys.path.append(
     )
 )
 
+import argparse
 import time
 import joblib
 import pandas as pd
@@ -399,12 +400,33 @@ def run(cfg: dict):
     print("===================================\n")
 
 
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "new_config.yaml"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Evaluate a saved DS-CNN keyword spotting model (no training).")
+    parser.add_argument("--config", type=str, default=None,
+        help=(
+            "Path to the YAML configuration file. "
+            "Defaults to new_config.yaml in the KWS directory."
+        ),)
+    return parser.parse_args(argv)
+
+
+def resolve_config_path(config_arg):
+    """Return the config path: the default new_config.yaml when no --config is given."""
+    if config_arg is None:
+        return DEFAULT_CONFIG_PATH
+    return Path(config_arg).expanduser().resolve()
+
+
 # ENTRY
 if __name__ == "__main__":
-    cfg_path = (
-        Path(__file__).resolve().parents[1]
-        / "new_config.yaml"
-    )
+    args = parse_args()
+    cfg_path = resolve_config_path(args.config)
+
+    print(f"Using configuration: {cfg_path}")
 
     cfg = load_config(cfg_path)
     run(cfg)
