@@ -1,0 +1,68 @@
+# Main environment: KWS + SGMSE (one environment runs both pipelines)
+#
+# Target interpreter: Python 3.9 (observed 3.9.25)
+# Target platform:    Linux x86_64, NVIDIA GPU, driver supporting CUDA 12.8
+#                     (observed driver 610.43.02, RTX 2080 Ti)
+#
+# Source of truth: ../environment/sgmse_env.pip-freeze.2026-11-08.txt
+# This file pins only packages the project code imports directly (plus the two
+# download tools). For a byte-exact rebuild of the observed environment, install
+# from the freeze file instead.
+#
+# On Linux x86_64, `torch==2.8.0` from PyPI is the CUDA 12.8 build
+# (observed: 2.8.0+cu128). To force that build explicitly, add
+#   --extra-index-url https://download.pytorch.org/whl/cu128
+
+# ---------------------------------------------------------------------------
+# A. OBSERVED: installed in code/sgmse/sgmse_env on 2026-11-08
+# ---------------------------------------------------------------------------
+
+# Deep learning
+torch==2.8.0
+torchaudio==2.8.0
+pytorch-lightning==2.6.0
+torch-ema==0.3
+torch-pesq==0.1.2
+
+# Numerics and data
+numpy==1.26.4
+scipy==1.13.1
+pandas==2.3.3
+scikit-learn==1.6.1
+joblib==1.5.3
+PyYAML==6.0.3
+tqdm==4.67.3
+
+# Audio
+librosa==0.11.0
+soundfile==0.13.1
+
+# Speech-enhancement metrics
+pesq==0.0.4
+pystoi==0.4.1
+
+# Plotting
+matplotlib==3.9.4
+seaborn==0.13.2
+
+# Logging (SGMSE training; pass --nolog to train.py to skip)
+wandb==0.25.1
+
+# Dataset and checkpoint download tools
+kagglehub==0.3.13
+gdown==5.2.1
+
+# ---------------------------------------------------------------------------
+# B. PROPOSED ADDITION: required, but NOT installed in sgmse_env
+# ---------------------------------------------------------------------------
+# code/kws/src/analysis_utils.py imports tabulate, and both KWS entry points
+# import analysis_utils. Version 0.9.0 is the one observed in the user site
+# (~/.local) and pinned in docker_skopavi/requirements.txt.
+tabulate==0.9.0
+
+# ---------------------------------------------------------------------------
+# Not listed (installed in sgmse_env but not imported by the final pipeline):
+#   torchvision==0.23.0, torchsde==0.2.6, sdeint==0.3.0, ninja==1.13.0
+#     (inherited from upstream code/sgmse/requirements.txt)
+#   pyroomacoustics==0.9.0 (used only by code/sgmse/preprocessing/)
+# ---------------------------------------------------------------------------

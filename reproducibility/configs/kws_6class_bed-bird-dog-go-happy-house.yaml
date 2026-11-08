@@ -1,0 +1,45 @@
+# KWS: 6-class experiment A, TRAIN + EVALUATE
+#   classes: bed, bird, dog, go, happy, house
+#
+# Reconstructs run: outputs/new_runs/2026-07-07_11-36-05
+#   (the latest 6-class run; same class list as the current local new_config.yaml)
+# Use with: python code/kws/src/run_training.py --config reproducibility/configs/kws_6class_bed-bird-dog-go-happy-house.yaml
+#
+# Provenance legend
+#   [RUN]     recorded in the run's own outputs
+#   [BRACKET] same value in the committed new_config.yaml immediately before
+#             (5dd2ae5, 2026-06-03) and after (96cc177, 2026-08-09) the run
+#   [CODE]    required by current code. The value is not used by the run
+
+device: auto                       # [BRACKET]
+
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"            # [BRACKET]
+clean_dir:  "/home/dsi/skopavi/Project/kws_project/data/raw/data_new"           # [BRACKET]
+meta:       "/home/dsi/skopavi/Project/kws_project/data/noisy_new_metadata.csv" # [BRACKET]
+noisy_dir:  "/home/dsi/skopavi/Project/kws_project/data/noisy_new"              # [BRACKET]
+
+enh_baseline: "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/baseline"       # [BRACKET]
+enh_trained:  "/home/dsi/skopavi/Project/kws_project/data/enhanced_new/trained_ep176"  # [BRACKET]
+enh_new_dir:  "/home/dsi/skopavi/Project/kws_project/data/enhanced_new"                # [BRACKET] [CODE]
+
+# [RUN] The classification report lists exactly these 6 classes. The run's 1124
+# evaluated test files equal the sum of their test folders (183+180+165+245+173+178).
+# [BRACKET] identical list in the 2026-08-09 committed config.
+folder_start: 0
+folder_end: 30
+selected_folders: ["bed", "bird", "dog", "go", "happy", "house"]
+
+sampling_rate: 16000               # [BRACKET]
+n_mfcc: 13                         # [BRACKET]
+
+batch_size: 64                     # [BRACKET]
+num_workers: 0                     # [BRACKET]
+shuffle_train: true                # [BRACKET]
+use_parallel: true                 # [BRACKET]
+
+epochs: 150                        # [BRACKET]
+patience: 10                       # [BRACKET]
+lr: 0.001                          # [BRACKET]
+weight_decay: 0.0001               # [BRACKET]
+
+random_state: 42                   # [BRACKET]

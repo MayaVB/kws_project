@@ -1,0 +1,24 @@
+# Optional demo environment: local Gradio viewer and demo-asset export
+#   code/kws/demo/gradio_demo.py
+#   code/kws/demo/export_demo_assets.py
+#
+# Target interpreter: Python 3.9 (observed 3.9.25). No GPU or torch needed.
+# Kept separate from the main environment because gradio 4.44.1 resolved to
+# numpy 2.x, whereas the main environment uses numpy 1.26.4.
+#
+# Source of truth: ../environment/demo_env.pip-freeze.2026-11-08.txt
+
+# ---------------------------------------------------------------------------
+# A. OBSERVED: installed in demo_env on 2026-11-08
+# ---------------------------------------------------------------------------
+gradio==4.44.1
+numpy==2.0.2
+scipy==1.13.1
+pandas==2.3.3
+librosa==0.11.0
+soundfile==0.13.1
+matplotlib==3.9.4
+
+# ---------------------------------------------------------------------------
+# B. PROPOSED ADDITIONS: none
+# ---------------------------------------------------------------------------

@@ -66,6 +66,8 @@ kws_project/
 │       └── requirements.txt
 │
 ├── docs/
+├── reproducibility/              # Environment record, pinned requirements, final configs, checkpoint hashes
+├── tests/                        # CPU-only unittest checks for the KWS entry points
 └── README.md
 ```
 
@@ -82,23 +84,54 @@ git clone https://github.com/MayaVB/kws_project.git
 cd kws_project
 ```
 
-### KWS Environment
+The results were produced with **Python 3.9** and **PyTorch 2.8.0 (CUDA 12.8 build)** on Linux with NVIDIA RTX 2080 Ti GPUs. The full record of the original environments (system details, raw `pip freeze` snapshots, checkpoint hashes) is in [`reproducibility/`](reproducibility/README.md).
 
-Install the dependencies required for the keyword spotting pipeline:
+### Main Environment (KWS + SGMSE)
 
-```bash
-pip install -r code/kws/requirements.txt
-```
-
-### SGMSE Environment
-
-The speech enhancement pipeline has additional dependencies:
+A single environment runs both the keyword spotting and the speech enhancement pipelines:
 
 ```bash
-pip install -r code/sgmse/requirements.txt
+python3.9 -m venv kws_main_env
+source kws_main_env/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r reproducibility/requirements/requirements-main.txt
 ```
 
-SGMSE uses PyTorch and custom CUDA/C++ operations. A compatible PyTorch, CUDA, and compiler environment is therefore required when running the enhancement model on a GPU.
+`requirements-main.txt` pins the versions observed in the original environment and adds `tabulate`, which the KWS reporting code requires but which was missing from that environment. To rebuild the original environment exactly instead, install from `reproducibility/environment/sgmse_env.pip-freeze.2026-11-08.txt` (and then add `tabulate==0.9.0`).
+
+On Linux x86_64, `torch==2.8.0` from PyPI is the CUDA 12.8 build. The NVIDIA driver must support CUDA 12.8. The system CUDA toolkit is not used.
+
+### Demo Environment (optional)
+
+The local Gradio demo uses a separate environment because it requires numpy 2.x:
+
+```bash
+python3.9 -m venv kws_demo_env
+source kws_demo_env/bin/activate
+python -m pip install -r reproducibility/requirements/requirements-demo.txt
+```
+
+### Verify the Installation
+
+With the main environment active, from the repository root (CPU only; no data or GPU needed):
+
+```bash
+python -c "import sys, torch; print(sys.version.split()[0], torch.__version__, torch.version.cuda)"
+# expected: 3.9.x 2.8.0+cu128 12.8
+
+CUDA_VISIBLE_DEVICES="" python - <<'EOF'
+import sys
+sys.path[:0] = ["code", "code/kws/src", "code/sgmse"]
+import tabulate, analysis_utils, config, dataset, features, models, metrics, train, visualization
+import new_noise_dataset, enhanced_dataset, kws.demo.demo_utils
+from sgmse.model import ScoreModel
+print("main environment OK")
+EOF
+```
+
+The original, unpinned dependency lists (`code/kws/requirements.txt`, `code/sgmse/requirements.txt`) are kept for reference. `code/sgmse/requirements_version.txt` lists the upstream SGMSE authors' versions, not the versions used in this project.
+
+If you use W&B logging for SGMSE training, run `wandb login` first, or pass `--nolog` to `train.py`.
 
 ---
 
@@ -189,13 +222,13 @@ A pretrained SGMSE+ model trained on VoiceBank-DEMAND is used as the baseline en
 
 SGMSE can be trained on the paired clean/noisy Google Speech Commands data generated for this project.
 
-A typical training command is:
+**Settings of the released checkpoint (historical).** The project checkpoint (`kws_sgmse_trained.ckpt`, epoch 176) was trained with **batch size 1, gradient accumulation 4 (effective batch 4), Adam learning rate 1e-4 and weight decay 0**. These values were recovered from the checkpoint's stored hyperparameters, optimizer state and loop counters; see [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md). To retrain with the same settings:
 
 ```bash
 python code/sgmse/train.py \
     --base_dir path/to/sgmse_dataset \
-    --batch_size 2 \
-    --accumulate_grad_batches 2 \
+    --batch_size 1 \
+    --accumulate_grad_batches 4 \
     --num_workers 2 \
     --max_epochs 200 \
     --backbone ncsnpp \
@@ -205,6 +238,12 @@ python code/sgmse/train.py \
     --log_dir path/to/sgmse_logs \
     --wandb_name kws_experiment
 ```
+
+`--max_epochs 200` is not recorded in the checkpoint. The released checkpoint is from epoch 176, selected by validation loss.
+
+An earlier version of this README gave `--batch_size 2 --accumulate_grad_batches 2`. That has the same effective batch size of 4, but it is not the configuration that produced the released checkpoint, and it is not guaranteed to give numerically equivalent training.
+
+SGMSE training is not seeded, so retraining gives a statistically comparable model, not an identical one.
 
 Training is logged using Weights & Biases unless `--nolog` is specified.
 
@@ -266,6 +305,14 @@ The selected SGMSE checkpoint obtained using the project data is available on Hu
 
 The checkpoint is not stored directly in this Git repository due to its size.
 
+`kws_sgmse_trained.ckpt` is the epoch-176 checkpoint of the project SGMSE training run (`epoch=176-valid_loss=558.3868.ckpt`); the two local files are byte-identical. It was used for every "project-trained SGMSE" result. Expected SHA-256:
+
+```text
+90e19444b5e6c7d9a07cc49543804a02f57717d8d971e45832ee531b447f7af5
+```
+
+Enhanced datasets were generated with the default sampler settings of `enhancement.py` (PC sampler, reverse-diffusion predictor, ALD corrector, 1 corrector step, `snr 0.5`, `N 30`). See [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md) for all checkpoint hashes and metadata.
+
 Alternatively, SGMSE can be trained from scratch or fine-tuned from the pretrained VoiceBank-DEMAND checkpoint using the instructions above.
 
 ---
@@ -320,6 +367,23 @@ Edit `new_config.yaml` to specify the local dataset and output paths.
 
 `new_config.yaml` is intentionally ignored by Git, allowing machine-specific paths and experiment settings to remain local.
 
+The optional `enh_new_dir` key (the parent directory of the enhanced datasets) is accepted but currently unused. Configs without it work. Earlier code versions required it and stopped with a `KeyError` when it was missing.
+
+The `random_state` key is also read but currently unused: the train/validation/test split comes from the `split` column of the noisy metadata CSV, and KWS training is not seeded.
+
+### Final Experiment Configurations
+
+The final results include a 30-class experiment and two 6-class experiments. Their configurations, reconstructed from the run outputs and the Git history, are in [`reproducibility/configs/`](reproducibility/configs/):
+
+| Config | Experiment | Original run |
+|---|---|---|
+| `kws_30class_train.yaml` | 30 classes, train + evaluate | `2026-05-26_18-01-43_all_folders` |
+| `kws_30class_eval.yaml` | 30 classes, evaluate the saved model | `2026-05-29_19-14-17_all_annot_false` |
+| `kws_6class_bed-bird-dog-go-happy-house.yaml` | 6 classes (A) | `2026-07-07_11-36-05` |
+| `kws_6class_go-no-off-on-stop-yes.yaml` | 6 classes (B) | `2026-06-08_12-14-57_presentation` |
+
+These files contain the original absolute paths of the lab machine; adjust them for your setup. The evidence for each value, the results, and the limits on exact reproduction (KWS training is not seeded; SGMSE sampling is stochastic) are documented in [`reproducibility/EXPERIMENTS.md`](reproducibility/EXPERIMENTS.md).
+
 ### Train and Evaluate
 
 Run the complete KWS training and evaluation pipeline with:
@@ -330,6 +394,25 @@ python code/kws/src/run_training.py \
 ```
 
 The configured evaluation modes include clean, noisy, pretrained-SGMSE-enhanced, and project-trained-SGMSE-enhanced speech.
+
+### Evaluate a Saved Model
+
+To evaluate a saved DS-CNN model (model, scaler and label encoder given by `best_model_path`, `scaler_path` and `label_encoder_path`) without retraining:
+
+```bash
+python code/kws/src/run_evaluation_main.py \
+    --config reproducibility/configs/kws_30class_eval.yaml
+```
+
+If `--config` is omitted, `code/kws/new_config.yaml` is used, as before. This script always evaluates every class in the metadata; `folder_start`, `folder_end` and `selected_folders` are ignored. (The "usage limitation" comment inside `kws_30class_eval.yaml` predates the `--config` option and no longer applies; the historical config files are intentionally left unedited.)
+
+### Tests
+
+CPU-only tests for the entry points (standard-library `unittest`; no GPU or data needed):
+
+```bash
+CUDA_VISIBLE_DEVICES="" python -m unittest discover -s tests -t . -v
+```
 
 ---
 
