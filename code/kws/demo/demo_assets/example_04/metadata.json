@@ -1,11 +1,11 @@
 {
-    "filename": "f17be97f_nohash_1.wav",
-    "true_word": "go",
-    "pred_noisy": "dog",
-    "pred_enh": "go",
-    "noise": "Doing the Dishes",
+    "filename": "6889b21f_nohash_0.wav",
+    "true_word": "dog",
+    "pred_noisy": "bed",
+    "pred_enh": "dog",
+    "noise": "White Noise",
     "snr": 2.5,
-    "label": "go",
+    "label": "dog",
     "noisy_correct": false,
     "enh_correct": true
 }

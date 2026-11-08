@@ -38,9 +38,21 @@ def parse_args():
 DEMO_EXAMPLES = [
 
     {
+        "label": "bird",
+        "filename": "c1d39ce8_nohash_0.wav",
+        "true_word": "bird",
+        "pred_clean": "bird",
+        "pred_noisy": "bed",
+        "pred_enh": "bird",
+        "noise": "Exercise Bike",
+        "snr": 7.5,
+    },
+
+    {
         "label": "four",
         "filename": "e0315cf6_nohash_3.wav",
         "true_word": "four",
+        "pred_clean": "four",
         "pred_noisy": "no",
         "pred_enh": "four",
         "noise": "Cat Meowing",
@@ -51,7 +63,8 @@ DEMO_EXAMPLES = [
     {
         "label": "off",
         "filename": "8e05039f_nohash_4.wav",
-        "true_word": "off",                                    
+        "true_word": "off",
+        "pred_clean": "off",
         "pred_noisy": "on",
         "pred_enh": "off",
         "noise": "Exercise Bike",
@@ -59,34 +72,25 @@ DEMO_EXAMPLES = [
     },
 
     {
+        "label": "dog",
+        "filename": "6889b21f_nohash_0.wav",
+        "true_word": "dog",
+        "pred_clean": "dog",
+        "pred_noisy": "bed",
+        "pred_enh": "dog",
+        "noise": "White Noise",
+        "snr": 2.5,
+    },
+
+    {
         "label": "tree",
         "filename": "b72e58c9_nohash_1.wav",
         "true_word": "tree",
+        "pred_clean": "tree",
         "pred_noisy": "two",
         "pred_enh": "tree",
         "noise": "Dishwashing",
         "snr": 2.5,
-    },
-
-    {
-        "label": "go",  
-        "filename": "f17be97f_nohash_1.wav",
-        "true_word": "go",
-        "pred_noisy": "dog",
-        "pred_enh": "go",
-        "noise": "Doing the Dishes",
-        "snr": 2.5,
-
-    },
-
-    {
-        "label": "bird",
-        "filename": "c1d39ce8_nohash_0.wav",
-        "true_word": "bird",
-        "pred_noisy": "bed",
-        "pred_enh": "bird",
-        "noise": "Exercise Bike",
-        "snr": 7.5,
     },
 
     # {
@@ -115,34 +119,44 @@ DEMO_EXAMPLES = [
 # SPECTROGRAM FUNCTION
 # =====================================================
 
+# Shared STFT and display settings, so that the Clean, Noisy and Enhanced
+# spectrograms of an example are directly comparable
+N_FFT = 512
+HOP_LENGTH = 128
+DB_RANGE = 80.0  # displayed dynamic range below the shared reference
+
+
+def stft_magnitude(signal):
+    return np.abs(librosa.stft(signal, n_fft=N_FFT, hop_length=HOP_LENGTH))
+
+
 def save_spectrogram(
     signal,
     fs,
     save_path,
     title,
-    show_info=False
+    show_info=False,
+    ref=None
 ):
+    # ref: shared magnitude reference (0 dB) for all signals of one example.
+    # If None, the signal's own maximum is used.
 
-    D = librosa.stft(
-        signal,
-        n_fft=512,
-        hop_length=128
-    )
+    S = stft_magnitude(signal)
 
     S_db = librosa.amplitude_to_db(
-        np.abs(D),
-        ref=np.max
+        S,
+        ref=np.max(S) if ref is None else ref
     )
 
     times = librosa.times_like(
         S_db,
         sr=fs,
-        hop_length=128
+        hop_length=HOP_LENGTH
     )
 
     freqs = librosa.fft_frequencies(
         sr=fs,
-        n_fft=512
+        n_fft=N_FFT
     ) / 1000.0
 
     plt.figure(figsize=(8,4))
@@ -152,8 +166,13 @@ def save_spectrogram(
         freqs,
         S_db,
         shading="auto",
-        cmap="inferno"
+        cmap="inferno",
+        vmin=-DB_RANGE,
+        vmax=0.0
     )
+
+    plt.xlim(0, len(signal) / fs)
+    plt.ylim(0, fs / 2000.0)
 
     cbar = plt.colorbar(img)
     cbar.set_label(
@@ -296,53 +315,43 @@ Noise: {ex["noise"]} | SNR: {ex["snr"]} dB
 
 </div>
 
-<div class="result-line">
-
-Noisy Prediction:
-
-<span class="bad">
-{ex["pred_noisy"]}
-</span>
-
-&nbsp;&nbsp;&nbsp;&nbsp;
-
-Enhanced Prediction:
-
-<span class="good">
-{ex["pred_enh"]}
-</span>
-
-</div>
-
 <div class="example-grid">
-
-<div class="card">
-
-<h3>Noisy Speech</h3>
-
-<audio controls>
-<source src="demo_assets/example_{idx:02d}/noisy.wav" type="audio/wav">
-</audio>
-
-<img src="demo_assets/example_{idx:02d}/noisy_spectrogram.png">
-
-</div>
-
-<div class="card">
-
-<h3>Enhanced Speech</h3>
-
-<audio controls>
-<source src="demo_assets/example_{idx:02d}/enhanced.wav" type="audio/wav">
-</audio>
-
-<img src="demo_assets/example_{idx:02d}/enhanced_spectrogram.png">
-
-</div>
-
+{generate_card(idx, ex, "clean", "Clean")}
+{generate_card(idx, ex, "noisy", "Noisy")}
+{generate_card(idx, ex, "enhanced", "Enhanced")}
 </div>
 
 </section>
+"""
+
+PRED_KEYS = {
+    "clean": "pred_clean",
+    "noisy": "pred_noisy",
+    "enhanced": "pred_enh",
+}
+
+def generate_card(idx, ex, kind, name):
+
+    asset = f"demo_assets/example_{idx:02d}/{kind}"
+    pred = ex[PRED_KEYS[kind]]
+    pred_class = "good" if pred == ex["true_word"] else "bad"
+
+    return f"""
+<div class="card">
+
+<h3>{name} Speech</h3>
+
+<audio controls>
+<source src="{asset}.wav" type="audio/wav">
+</audio>
+
+<div class="card-pred">
+{name} Prediction: <span class="{pred_class}">{pred}</span>
+</div>
+
+<img src="{asset}_spectrogram.png">
+
+</div>
 """
 
 def generate_html():
@@ -360,6 +369,7 @@ def generate_html():
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>
 KWS Enhancement Demo
@@ -396,7 +406,7 @@ h2{{
 
 .example-grid{{
     display:grid;
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
     gap:25px;
     margin-top:25px;
 }}
@@ -427,6 +437,7 @@ img{{
     border:1px solid #cccccc;
 }}
 
+
 .bad{{
     color:red;
     font-weight:bold;
@@ -445,8 +456,15 @@ img{{
     margin-bottom:8px;
 }}
 
+.card-pred{{
+    text-align:center;
+    font-size:18px;
+    font-weight:600;
+    margin-bottom:10px;
+}}
+
 .result-line{{
-    text-align:left;
+    text-align:center;
     font-size:20px;
     font-weight:600;
     margin-bottom:18px;
@@ -460,6 +478,19 @@ footer{{
     margin-top:60px;
     text-align:center;
     color:#666;
+}}
+
+@media (max-width: 900px){{
+    body{{
+        padding:16px;
+    }}
+    .example-grid{{
+        grid-template-columns:1fr;
+        gap:18px;
+    }}
+    .result-line{{
+        font-size:18px;
+    }}
 }}
 
 </style>
@@ -610,6 +641,11 @@ def main():
             sr=SAMPLING_RATE
         )
     
+        # Shared spectrogram scale for this example: 0 dB = loudest STFT bin
+        # over Clean, Noisy and Enhanced
+        signals = (clean_sig, noisy_sig, enh_sig)
+        spec_ref = max(np.max(stft_magnitude(s)) for s in signals)
+    
         # -------------------------------------------------
         # SPECTROGRAMS
         # -------------------------------------------------
@@ -622,7 +658,8 @@ def main():
                 "clean_spectrogram.png"
             ),
             f"""Clean Speech | Keyword: {ex["true_word"]}""",
-            show_info=False
+            show_info=False,
+            ref=spec_ref
         )
     
         save_spectrogram(
@@ -633,7 +670,8 @@ def main():
                 "noisy_spectrogram.png"
             ),
              f"""Noisy Speech | Keyword: {ex["true_word"]} | {ex["noise"]} | SNR = {ex["snr"]} dB""",
-            show_info=False
+            show_info=False,
+            ref=spec_ref
         )
     
         save_spectrogram(
@@ -644,7 +682,8 @@ def main():
                 "enhanced_spectrogram.png"
             ),
             f"""Enhanced Speech | Keyword: {ex["true_word"]} | {ex["noise"]} | SNR = {ex["snr"]} dB""",
-            show_info=False
+            show_info=False,
+            ref=spec_ref
         )
     
         # -------------------------------------------------
@@ -736,7 +775,7 @@ def main():
             "filename": filename,
     
             "true_word": ex["true_word"],
-    
+
             "pred_noisy": ex["pred_noisy"],
             "pred_enh": ex["pred_enh"],
     
