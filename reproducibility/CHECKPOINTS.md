@@ -4,13 +4,22 @@ Verified on 2026-11-08. Hashes were computed with `sha256sum`. Metadata was read
 on CPU with `torch.load(..., mmap=True)` from the checkpoint's stored
 `hyper_parameters`, `epoch` and `global_step`.
 
+**Locations.** `<archive>` = `/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive`,
+the verified GannotLab copy and the current location of every file below. "Historical"
+paths are relative to the repository on the lab machine, where the files were created
+and where the originals still are. The archive copies have the same SHA-256 values
+(Phase 5C) and reproduce the historical results (Phase 5D; see `VERIFICATION.md`).
+Data paths such as `data/enhanced_new/...` are historical; see `DATA_LAYOUT.md`.
+
 ## SGMSE enhancement models
 
 ### Project-trained SGMSE+ (epoch 176): used for every "enh_trained" result
 
 | Item | Value |
 |---|---|
-| **Preferred permanent local copy** | `experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt` |
+| **Archive copy (current)** | `<archive>/checkpoints/sgmse/epoch=176-valid_loss=558.3868.ckpt` |
+| Historical path | `experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt` |
+| Content | The **full original training checkpoint** written by Lightning during training: model weights, EMA weights, optimizer state and loop counters (the batching evidence below comes from these) |
 | Size | 1,312,973,992 bytes |
 | SHA-256 | `90e19444b5e6c7d9a07cc49543804a02f57717d8d971e45832ee531b447f7af5` |
 | Stored metadata | `epoch` 176 (0-indexed, i.e. the 177th epoch), `global_step` 272226, written by PyTorch Lightning 2.6.0 |
@@ -21,14 +30,22 @@ on CPU with `torch.load(..., mmap=True)` from the checkpoint's stored
 | Selection | Checkpoint kept by a `ModelCheckpoint(monitor='valid_loss', mode='min')` callback (the filename embeds `valid_loss=558.3868`) |
 | Enhanced output | `data/enhanced_new/trained_ep176/` (6473 wav files, generated 2026-05-21) |
 
-**Identical copy:** `experiments/sgmse_logs/fcj02u93-kws_exp_9/kws_sgmse_trained.ckpt`
+**Identical local copy (not archived):** `experiments/sgmse_logs/fcj02u93-kws_exp_9/kws_sgmse_trained.ckpt`
 (created 2026-09-06). `cmp` on 2026-11-08 found it **byte-identical** to the
 epoch-176 file. It is a separate file (different inode), not a link, so it uses
-another 1.25 GB. Its filename matches the checkpoint the main README links on
-Hugging Face:
+another 1.25 GB. It was not copied to the archive.
+
+**Hugging Face file: UNRESOLVED.** The main README links
 [`avitalskop/kws-sgmse/kws_sgmse_trained.ckpt`](https://huggingface.co/avitalskop/kws-sgmse/blob/main/kws_sgmse_trained.ckpt).
-**Not yet verified:** the Hugging Face copy was not downloaded or hashed during
-this audit. It is only expected to match the SHA-256 above.
+It has the same name as the local duplicate, but it has **not** been shown to be the
+same file. On 2026-11-08, an HTTP `HEAD` request to the Hugging Face download URL returned
+`x-linked-size: 594804736` and
+`x-linked-etag: 4c7083b8fe00f4871e00ef97f01b5920fedd555248bbfe3a9441cfdcdde20f34`.
+That size differs from the 1,312,973,992-byte original, so the SHA-256 above does
+**not** apply to the public file. The public file has not been downloaded or hashed,
+so its content (for example, whether it holds the same weights with training state
+removed) is unknown. Treat its identity as unresolved until it is downloaded and
+compared. The archived file above is the reference checkpoint for every result.
 
 **Historical training settings: batch size 1, gradient accumulation 4, weight decay 0.**
 *(Corrected 2026-11-08. An earlier version of this file wrongly concluded batch 2 × accumulation 2.)*
@@ -68,7 +85,8 @@ Whether any layer depends on batch composition was not checked.
 
 | Item | Value |
 |---|---|
-| Local path | `code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt` |
+| Archive copy (current) | `<archive>/checkpoints/sgmse/train_vb_29nqe0uh_epoch=115.ckpt` |
+| Historical path | `code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt` |
 | Size | 1,312,806,643 bytes |
 | SHA-256 | `e3875747b5646092d5c556bae68e5af639e2c1f45f009c669f379cd4d415cbd8` |
 | Stored metadata | `epoch` 116, `global_step` 41992, PyTorch Lightning 1.5.10, `base_dir /data/richter/VoiceBank/` |
@@ -105,7 +123,10 @@ belong to the checkpoint-selection history, not to the final results.
 
 ## DS-CNN keyword-spotting classifiers (all small; none in Git or on Hugging Face)
 
-| Experiment | Location | best_model.pt SHA-256 | scaler.pkl SHA-256 | label_encoder.pkl SHA-256 |
+Archive copies (current): `<archive>/classifier_backups/dscnn/{30class, 6class_bed-bird-dog-go-happy-house, 6class_go-no-off-on-stop-yes}/`.
+The locations in the table are historical.
+
+| Experiment | Historical location | best_model.pt SHA-256 | scaler.pkl SHA-256 | label_encoder.pkl SHA-256 |
 |---|---|---|---|---|
 | 30-class (from run 2026-05-26 `all_folders`) | `outputs/dscnn_full_dataset_best/` (byte-identical to `outputs/new_runs/2026-05-26_18-01-43_all_folders/models/`) | `37f9f425fe403ca6e395077cda1043c599cb71f70fdfc5d5c90e985d0a84ab00` | `e582839d99e8d5cef86ebf473beadaf6d9d47d6676980b1ec2dcc0374e8702ac` | `9a25b3d08613988848fcf451cf48048dee519825ce9fcace78bba1daae4ecff6` |
 | 6-class A: bed, bird, dog, go, happy, house | `outputs/new_runs/2026-07-07_11-36-05/models/` | `506c95d46c4204616ab132d84c0713136dd63bcebebb49ab709782b33920f890` | `897b3c4e36622a1f0f84ba418b498ea5ab01d101f8d5f75c9e826615f1910239` | `5bb856dad61660c53ea82e15a7614745e0d52c58a1a14c2ba0f10038f5558063` |
@@ -120,4 +141,5 @@ The other `best_model.pt` files under `outputs/` belong to exploratory runs.
 | epoch-176 SGMSE checkpoint | Needed to regenerate `enhanced_new/trained_ep176` | Can be retrained (see README) but not bit-exactly |
 | Pretrained VB-DMD checkpoint | Needed to regenerate `enhanced_new/baseline` | Needed (re-downloadable) |
 | DS-CNN artifacts | Needed to re-evaluate without retraining | Can be retrained with `reproducibility/configs/` |
-| `kws_sgmse_trained.ckpt` local copy | Redundant (identical to epoch 176) | Redundant |
+| `kws_sgmse_trained.ckpt` local copy | Redundant (identical to epoch 176; not archived) | Redundant |
+| `kws_sgmse_trained.ckpt` on Hugging Face | Unresolved: a different file (see above); not used by any verified result | Unresolved |

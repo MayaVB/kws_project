@@ -14,10 +14,11 @@ directly or marked as unverified.
 | [`VERIFICATION.md`](VERIFICATION.md) | Clean-environment test results: exact reproduction of DS-CNN predictions and 30-class evaluation results, SGMSE CPU checks, what remains unverified |
 | [`requirements/requirements-main.txt`](requirements/requirements-main.txt) | Pinned direct dependencies for KWS + SGMSE (observed versions, plus `tabulate` as a proposed addition) |
 | [`requirements/requirements-demo.txt`](requirements/requirements-demo.txt) | Pinned dependencies for the optional Gradio demo |
-| [`configs/`](configs/) | Reconstructed configs for the 30-class and both 6-class experiments, with per-key provenance |
+| [`configs/`](configs/) | Reconstructed configs for the 30-class and both 6-class experiments, with per-key provenance (historical paths, kept unedited) |
+| [`configs/archive/`](configs/archive/) | The same four configs with data and model paths pointing to the GannotLab archive |
 | [`EXPERIMENTS.md`](EXPERIMENTS.md) | The final experiments, the evidence behind each config, results, limits on exact reproduction |
 | [`CHECKPOINTS.md`](CHECKPOINTS.md) | SGMSE and DS-CNN checkpoint identities (SHA-256, metadata, inference settings) |
-| [`DATA_LAYOUT.md`](DATA_LAYOUT.md) | Current data locations and a proposed convention for GannotLab storage |
+| [`DATA_LAYOUT.md`](DATA_LAYOUT.md) | Historical data locations, their GannotLab archive equivalents, how the code finds the data, remaining risks |
 
 ## Verifying an environment
 
@@ -39,9 +40,26 @@ print("main environment OK")
 EOF
 
 # 3. Checkpoint identity (reads ~1.3 GB per file)
-sha256sum path/to/kws_sgmse_trained.ckpt
+sha256sum "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/checkpoints/sgmse/epoch=176-valid_loss=558.3868.ckpt"
 #    expected: 90e19444b5e6c7d9a07cc49543804a02f57717d8d971e45832ee531b447f7af5
+#    (the original training checkpoint; the Hugging Face file is a different,
+#    still-unverified file, see CHECKPOINTS.md)
 ```
+
+## Historical and archive-location configs
+
+| | `configs/*.yaml` (historical) | `configs/archive/*.yaml` (archive location) |
+|---|---|---|
+| Purpose | Record of what each final experiment read | Re-run the same experiment today |
+| Data and model paths | Original paths under `/home/dsi/skopavi/Project/kws_project` | Same files in `/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive` |
+| Everything else | — | Byte-identical to the historical file, including the provenance comments and `output_dir`, below an added header comment |
+| Edited? | Never | Generated 2026-11-08 by substituting path prefixes; each file's header lists the substitutions |
+
+Every non-path key is the same in both versions, so a run with an archive variant is
+the same experiment. The archived inputs were checked by SHA-256 in Phase 5C. In Phase 5D,
+the 30-class evaluation reproduced the historical reports byte for byte from them (see
+[`VERIFICATION.md`](VERIFICATION.md#archive-verification-phases-5c-and-5d-2026-11-08)).
+On another machine, copy an archive variant and change its path values.
 
 ## Corrections log
 
@@ -51,6 +69,8 @@ sha256sum path/to/kws_sgmse_trained.ckpt
 | 2026-11-08 | `EXPERIMENTS.md`, main README | `random_state` is read but **unused** by KWS training; the split comes from the metadata CSV |
 | 2026-11-08 | `EXPERIMENTS.md`, `DATA_LAYOUT.md` | The noisy metadata does **not** record noise-segment offsets, so it cannot recreate the mixtures exactly; `data/noisy_new` is the only exact copy |
 | 2026-11-08 | `configs/kws_30class_eval.yaml` (comment only, left unedited) | Its "usage limitation" note is obsolete: `run_evaluation_main.py` now accepts `--config` |
+| 2026-11-08 | `CHECKPOINTS.md`, main README | The Hugging Face `kws_sgmse_trained.ckpt` was described as matching SHA-256 `90e19444…`. Hugging Face reports a different size (594,804,736 bytes) for it, so that hash does not apply; its identity is **unresolved** until the public file is downloaded and compared |
+| 2026-11-08 | `DATA_LAYOUT.md`, `CHECKPOINTS.md`, `EXPERIMENTS.md` | Data and models now have a verified GannotLab archive location; paths in these files are marked as historical or archive |
 
 The four files in `configs/` are kept exactly as reconstructed. Corrections are
 recorded here rather than by editing them.

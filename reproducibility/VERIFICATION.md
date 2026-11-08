@@ -51,6 +51,34 @@ Two regressions were found and fixed during this verification, in commits
 could not complete). Both were introduced after the final experiments, so the
 historical results are unaffected.
 
+## Archive verification (phases 5C and 5D, 2026-11-08)
+
+All datasets and models were copied to the GannotLab archive
+`/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive` (layout in
+[`DATA_LAYOUT.md`](DATA_LAYOUT.md)) and then used from there.
+
+**Copy (5C).** 14 items, 161,989 files, 7.3 GiB. Per-file SHA-256 manifests of
+source and archive are identical for all items, and `rsync --checksum` dry runs found
+no differences. Both SGMSE checkpoints and the 9 DS-CNN files match the SHA-256
+values in [`CHECKPOINTS.md`](CHECKPOINTS.md). The manifests are in `<archive>/manifests/`.
+
+**Use (5D).** CPU only, with every input read from the archive (archive-path copy of
+`configs/kws_30class_eval.yaml`, now `configs/archive/kws_30class_eval.yaml`):
+
+| Check | Result |
+|---|---|
+| DS-CNN sets (30, 6, 6 classes) from the archive | Strict loading; class lists as expected; 13 scaler features |
+| 6-class A and B, per-file predictions in 4 modes vs the historical CSVs | **10,284 / 10,284 identical**; all 8 accuracies identical |
+| 30-class evaluation, end to end | `metrics.txt`, `reports.txt`, `misclassified_report.txt` **byte-identical** to the 2026-05-29 run; every output, including per-file CSVs and plots, byte-identical to the 2026-11-08 run from the home data. Accuracies 0.930326 / 0.648386 / 0.788970 / 0.824811 |
+| SGMSE, both archived checkpoints, 3 archived noisy files | Load on CPU; outputs 16 kHz, 16000 samples, finite, alignment lag 0, level within 1 % RMS of the historical files; mean SI-SDR 4.2 dB → 14.9 dB (pretrained, historical 15.3) and 17.0 dB (epoch 176, historical 16.9). Not bit-identical (unseeded sampler) |
+| Path independence (`strace` of every file call, child processes included) | No read or attempted read of the original data, outputs or checkpoints in the home directory |
+
+`<archive>/manifests/archive_checks.sh`, the 5C checksum script, finds the hashes in
+`CHECKPOINTS.md` by line number, as the file was at commit `700e943`. To re-run
+it against later edits, point its `DOC` variable at
+`git show 700e943:reproducibility/CHECKPOINTS.md`. Checking the archive against its
+own manifests (see `<archive>/README.md`) does not need the source or this file.
+
 ## Not verified
 
 - Running the new environment on a GPU. The wheels are the CUDA 12.8 builds, but
@@ -60,5 +88,9 @@ historical results are unaffected.
 - The PESQ difference seen in the 3-file enhancement test (needs more files or
   repeated samples).
 - W&B logging, Kaggle and gdown downloads (credentials and network), and the
-  Hugging Face copy of the epoch-176 checkpoint.
+  Hugging Face `kws_sgmse_trained.ckpt`. Hugging Face reports a different size
+  for it than for the original checkpoint, and its identity is unresolved (see
+  `CHECKPOINTS.md`).
+- An off-site copy of the data: the archive and the home originals are on the same
+  storage cluster.
 - The optional Gradio demo environment (`demo_env`) was not rebuilt.

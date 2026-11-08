@@ -1,0 +1,75 @@
+# ARCHIVE-LOCATION VARIANT of ../kws_30class_train.yaml
+#
+# Identical to the historical config except for these path values, which now point
+# to the verified GannotLab archive (same bytes, checked by SHA-256 in Phase 5C and
+# by re-running the evaluation in Phase 5D):
+#   <repo>/data/raw/data_new                -> <archive>/datasets/speech_commands_v0.01
+#   <repo>/data/noisy_new_metadata.csv      -> <archive>/datasets/noisy_new_metadata.csv
+#   <repo>/data/noisy_new                   -> <archive>/datasets/noisy_new
+#   <repo>/data/enhanced_new/...            -> <archive>/datasets/enhanced_new/...
+#   <repo>/outputs/dscnn_full_dataset_best  -> <archive>/classifier_backups/dscnn/30class
+# <repo>     = /home/dsi/skopavi/Project/kws_project (where the experiment originally ran)
+# <archive>  = /dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive
+# output_dir is unchanged: new runs are written to the working repository, never to
+# the archive. The historical file is the record of the original run; use this file
+# to run it today. See reproducibility/README.md.
+#
+# ---- historical config follows (paths substituted) ----
+# KWS: 30-class experiment, TRAIN + EVALUATE
+#
+# Reconstructs run: outputs/new_runs/2026-05-26_18-01-43_all_folders
+#   (DS-CNN trained on all 30 keyword classes. Its model, scaler and label encoder
+#   are byte-identical to outputs/dscnn_full_dataset_best/)
+# Use with: python code/kws/src/run_training.py --config reproducibility/configs/kws_30class_train.yaml
+#
+# Provenance legend
+#   [RUN]     recorded in that run's own outputs (reports, metrics, file counts)
+#   [BRACKET] same value in the committed new_config.yaml immediately before
+#             (ff92488, 2026-05-20) and after (92da893, 2026-06-01) the run.
+#             The run did not save its config, so this is the strongest evidence
+#   [CODE]    required by current code. The value is not used by the run
+#
+# Paths are the original absolute paths on the lab machine (left unchanged; see
+# reproducibility/DATA_LAYOUT.md for the proposed future convention).
+
+device: auto                       # [BRACKET]
+
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"            # [BRACKET]
+clean_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/speech_commands_v0.01"           # [BRACKET]
+meta:       "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new_metadata.csv" # [BRACKET]
+noisy_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new"              # [BRACKET]
+
+# Pretrained VB-DMD SGMSE+ enhancement of the 6473-file test split.
+# [RUN] The run evaluated enh_baseline. Only one baseline directory exists.
+enh_baseline: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/baseline"
+# Project-trained SGMSE epoch-176 enhancement.
+# [RUN] The run's enh_trained metrics (PESQ 2.00, SI-SDR 15.3, SI-SIR 26.6,
+#       SI-SAR 15.9) equal the enh_trained_ep176 row of run 2026-05-25. The
+#       2026-05-20 config pointed at trained_ep166; 2026-06-01 at trained_ep176.
+enh_trained: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/trained_ep176"
+# [CODE] run_training.py reads this key, but the code that used it is disabled.
+enh_new_dir: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new"
+
+# [RUN] The classification reports list all 30 classes; there are 6473 test files.
+folder_start: 0
+folder_end: 30
+selected_folders: null
+
+sampling_rate: 16000               # [BRACKET]
+n_mfcc: 13                         # [BRACKET]
+
+batch_size: 64                     # [BRACKET]
+num_workers: 0                     # [BRACKET]
+shuffle_train: true                # [BRACKET]
+use_parallel: true                 # [BRACKET]
+
+# Maximum epochs: the bracketing configs DIFFER (100 on 2026-05-20, 150 on 2026-06-01).
+# [RUN] plots/training_history.png shows early stopping at about 91 epochs,
+# below both limits. Either value therefore gives the same training trajectory.
+# 150 is used here to match the later committed config.
+epochs: 150
+patience: 10                       # [BRACKET]
+lr: 0.001                          # [BRACKET]
+weight_decay: 0.0001               # [BRACKET]
+
+random_state: 42                   # [BRACKET]  (train/val split seed)

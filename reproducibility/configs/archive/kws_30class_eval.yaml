@@ -1,0 +1,69 @@
+# ARCHIVE-LOCATION VARIANT of ../kws_30class_eval.yaml
+#
+# Identical to the historical config except for these path values, which now point
+# to the verified GannotLab archive (same bytes, checked by SHA-256 in Phase 5C and
+# by re-running the evaluation in Phase 5D):
+#   <repo>/data/raw/data_new                -> <archive>/datasets/speech_commands_v0.01
+#   <repo>/data/noisy_new_metadata.csv      -> <archive>/datasets/noisy_new_metadata.csv
+#   <repo>/data/noisy_new                   -> <archive>/datasets/noisy_new
+#   <repo>/data/enhanced_new/...            -> <archive>/datasets/enhanced_new/...
+#   <repo>/outputs/dscnn_full_dataset_best  -> <archive>/classifier_backups/dscnn/30class
+# <repo>     = /home/dsi/skopavi/Project/kws_project (where the experiment originally ran)
+# <archive>  = /dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive
+# output_dir is unchanged: new runs are written to the working repository, never to
+# the archive. The historical file is the record of the original run; use this file
+# to run it today. See reproducibility/README.md.
+#
+# ---- historical config follows (paths substituted) ----
+# KWS: 30-class experiment, EVALUATE A SAVED MODEL (no training)
+#
+# Reconstructs run: outputs/new_runs/2026-05-29_19-14-17_all_annot_false
+#   This run has no models/ directory (evaluation only). Its clean / noisy /
+#   enh_baseline / enh_trained accuracies (0.9303 / 0.6484 / 0.789 / 0.8248)
+#   equal those of training run 2026-05-26_18-01-43_all_folders. That shows it
+#   evaluated the saved 30-class model in outputs/dscnn_full_dataset_best/.
+#   Unlike the training run, it also reports enh_baseline enhancement metrics.
+# Usage LIMITATION: run_evaluation_main.py has no --config option. It always
+#   reads code/kws/new_config.yaml (hard-coded at the bottom of the script).
+#   Until a --config option is added (a code change, not part of this
+#   documentation pass), using this file means placing its contents in
+#   code/kws/new_config.yaml. Back up any existing local new_config.yaml first.
+#
+# Provenance legend: see kws_30class_train.yaml. [COMMIT] means the value appears
+# in the committed new_config.yaml from 92da893 (2026-06-01) onward.
+# "annot_false" in the run name refers to confusion-matrix plot annotations.
+# That is not a config key.
+
+device: auto
+
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"
+clean_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/speech_commands_v0.01"
+meta:       "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new_metadata.csv"
+noisy_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new"
+
+enh_baseline: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/baseline"       # [RUN] metrics match the 2026-05-25 baseline row
+enh_trained:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/trained_ep176"  # [RUN] metrics match the 2026-05-25 ep176 row
+enh_new_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new"                # not read by run_evaluation_main.py; kept for symmetry
+
+# Saved 30-class DS-CNN classifier (SHA-256 in reproducibility/CHECKPOINTS.md)        # [COMMIT]
+best_model_path:    "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/classifier_backups/dscnn/30class/best_model.pt"
+scaler_path:        "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/classifier_backups/dscnn/30class/scaler.pkl"
+label_encoder_path: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/classifier_backups/dscnn/30class/label_encoder.pkl"
+
+folder_start: 0
+folder_end: 30
+selected_folders: null
+
+sampling_rate: 16000
+n_mfcc: 13
+batch_size: 64
+num_workers: 0
+shuffle_train: true
+use_parallel: true
+
+# Training keys: unused in evaluation-only mode, kept identical to the training config.
+epochs: 150
+patience: 10
+lr: 0.001
+weight_decay: 0.0001
+random_state: 42

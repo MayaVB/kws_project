@@ -1,0 +1,63 @@
+# ARCHIVE-LOCATION VARIANT of ../kws_6class_go-no-off-on-stop-yes.yaml
+#
+# Identical to the historical config except for these path values, which now point
+# to the verified GannotLab archive (same bytes, checked by SHA-256 in Phase 5C and
+# by re-running the evaluation in Phase 5D):
+#   <repo>/data/raw/data_new                -> <archive>/datasets/speech_commands_v0.01
+#   <repo>/data/noisy_new_metadata.csv      -> <archive>/datasets/noisy_new_metadata.csv
+#   <repo>/data/noisy_new                   -> <archive>/datasets/noisy_new
+#   <repo>/data/enhanced_new/...            -> <archive>/datasets/enhanced_new/...
+#   <repo>/outputs/dscnn_full_dataset_best  -> <archive>/classifier_backups/dscnn/30class
+# <repo>     = /home/dsi/skopavi/Project/kws_project (where the experiment originally ran)
+# <archive>  = /dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive
+# output_dir is unchanged: new runs are written to the working repository, never to
+# the archive. The historical file is the record of the original run; use this file
+# to run it today. See reproducibility/README.md.
+#
+# ---- historical config follows (paths substituted) ----
+# KWS: 6-class experiment B, TRAIN + EVALUATE
+#   classes: go, no, off, on, stop, yes
+#
+# Reconstructs run: outputs/new_runs/2026-06-08_12-14-57_presentation
+# Use with: python code/kws/src/run_training.py --config reproducibility/configs/kws_6class_go-no-off-on-stop-yes.yaml
+#
+# Provenance legend
+#   [RUN]     recorded in the run's own outputs
+#   [BRACKET] same value in the committed new_config.yaml immediately before
+#             (5dd2ae5, 2026-06-03) and after (96cc177, 2026-08-09) the run
+#   [CODE]    required by current code. The value is not used by the run
+#
+# NOTE: neither committed config contains this class list. It is reconstructed
+# only from the run's outputs (see selected_folders below).
+
+device: auto                       # [BRACKET]
+
+output_dir: "/home/dsi/skopavi/Project/kws_project/outputs/new_runs"            # [BRACKET]
+clean_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/speech_commands_v0.01"           # [BRACKET]
+meta:       "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new_metadata.csv" # [BRACKET]
+noisy_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/noisy_new"              # [BRACKET]
+
+enh_baseline: "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/baseline"       # [BRACKET]
+enh_trained:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new/trained_ep176"  # [BRACKET]
+enh_new_dir:  "/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive/datasets/enhanced_new"                # [BRACKET] [CODE]
+
+# [RUN] The classification report lists exactly these 6 classes. The run's 1447
+# evaluated test files equal the sum of their test folders.
+folder_start: 0
+folder_end: 30
+selected_folders: ["go", "no", "off", "on", "stop", "yes"]
+
+sampling_rate: 16000               # [BRACKET]
+n_mfcc: 13                         # [BRACKET]
+
+batch_size: 64                     # [BRACKET]
+num_workers: 0                     # [BRACKET]
+shuffle_train: true                # [BRACKET]
+use_parallel: true                 # [BRACKET]
+
+epochs: 150                        # [BRACKET]
+patience: 10                       # [BRACKET]
+lr: 0.001                          # [BRACKET]
+weight_decay: 0.0001               # [BRACKET]
+
+random_state: 42                   # [BRACKET]

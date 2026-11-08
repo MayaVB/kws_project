@@ -1,77 +1,83 @@
-# Data layout: current state and proposed convention
+# Data layout: historical locations and the GannotLab archive
 
-**Status: proposal only.** No data has been moved. No existing absolute path in
-code, configs or documentation has been changed.
+**Status (2026-11-08):** the verified copy in the GannotLab archive is the default
+location for every dataset and model used by the final results. The original files
+under the lab home directory still exist; nothing has been moved or deleted.
 
-## Current layout (2026-11-08)
+| Name used below | Path (lab machine) |
+|---|---|
+| `<repo>` (historical location) | `/home/dsi/skopavi/Project/kws_project`: where the experiments ran and the data was created |
+| `<archive>` (current location) | `/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive`: verified copy (mode 2750, group `dsi`) |
 
-Everything sits under the project root
-`/home/dsi/skopavi/Project/kws_project`, and configs use absolute paths.
+The other reproducibility documents give **historical** paths: they record where
+each experiment read its inputs. Use the table below to find the same bytes in the archive.
 
-| Content | Current path | Size | Needed for final results |
+## Where each artifact is
+
+| Content | Historical path (`<repo>/…`) | Archive path (`<archive>/…`) | Files |
 |---|---|---|---|
-| Clean Google Speech Commands | `data/raw/data_new/` | 5.8 GB | yes |
-| Noisy dataset | `data/noisy_new/{train,val,test}/` | 6.5 GB | yes |
-| Noisy metadata | `data/noisy_new_metadata.csv` | 3.2 MB | yes (split, noise type and SNR per file; no noise offsets, so the wav files in `noisy_new/` are the only exact copy) |
-| Enhanced: pretrained SGMSE+ | `data/enhanced_new/baseline/` | part of 712 MB | yes |
-| Enhanced: epoch-176 SGMSE+ | `data/enhanced_new/trained_ep176/` | part of 712 MB | yes |
-| Enhanced metadata (identical pair) | `data/enhanced_pretrainted_new_metadata.csv`, `data/enhanced_trained_ep176_new_metadata.csv` | 0.3 MB each | yes |
-| SGMSE paired training data | `data/train_sgmse/{train,valid}/{clean,noisy}/` | 1.1 GB | only to retrain SGMSE |
-| SGMSE checkpoint (epoch 176) + identical copy | `experiments/sgmse_logs/fcj02u93-kws_exp_9/` | 2 × 1.25 GB | one copy |
-| Pretrained SGMSE+ checkpoint | `code/sgmse/checkpoints/` | 1.25 GB | yes (re-downloadable) |
-| DS-CNN models and run reports | `outputs/` | 72 MB | the three final model folders |
+| Clean Google Speech Commands v0.01 | `data/raw/data_new/` | `datasets/speech_commands_v0.01/` | 64,732 |
+| Noisy dataset (train/val/test) | `data/noisy_new/` | `datasets/noisy_new/` | 64,721 |
+| Noisy metadata | `data/noisy_new_metadata.csv` | `datasets/noisy_new_metadata.csv` | 1 |
+| Enhanced: pretrained SGMSE+ | `data/enhanced_new/baseline/` | `datasets/enhanced_new/baseline/` | 6,473 (12,946 in `enhanced_new/` together with the next row) |
+| Enhanced: epoch-176 SGMSE+ | `data/enhanced_new/trained_ep176/` | `datasets/enhanced_new/trained_ep176/` | 6,473 |
+| Enhanced metadata (identical pair) | `data/enhanced_pretrainted_new_metadata.csv`, `data/enhanced_trained_ep176_new_metadata.csv` | `datasets/` (same names) | 2 |
+| SGMSE paired training data | `data/train_sgmse/` | `datasets/train_sgmse/` | 19,118 |
+| SGMSE epoch-176 checkpoint (full training checkpoint) | `experiments/sgmse_logs/fcj02u93-kws_exp_9/epoch=176-valid_loss=558.3868.ckpt` | `checkpoints/sgmse/epoch=176-valid_loss=558.3868.ckpt` | 1 |
+| Pretrained SGMSE+ (VoiceBank-DEMAND) | `code/sgmse/checkpoints/train_vb_29nqe0uh_epoch=115.ckpt` | `checkpoints/sgmse/train_vb_29nqe0uh_epoch=115.ckpt` | 1 |
+| DS-CNN 30-class | `outputs/dscnn_full_dataset_best/` | `classifier_backups/dscnn/30class/` | 3 |
+| DS-CNN 6-class A | `outputs/new_runs/2026-07-07_11-36-05/models/` | `classifier_backups/dscnn/6class_bed-bird-dog-go-happy-house/` | 3 |
+| DS-CNN 6-class B | `outputs/new_runs/2026-06-08_12-14-57_presentation/models/` | `classifier_backups/dscnn/6class_go-no-off-on-stop-yes/` | 3 |
+| All run outputs | `outputs/new_runs/` | `experiments_archive/outputs_new_runs/` | 353 |
 
-Absolute paths appear in: `code/kws/new_config.yaml` (local, ignored by Git),
-`reproducibility/configs/*.yaml`, `code/sgmse/model_visualization/sgmse_visualization.py`,
-and two experimental scripts ignored by Git (`code/kws/denoiser/noise_onthefly_dataset.py`,
-`code/kws/dataset_generation/build_reverb_dataset.py`).
+Not archived: `experiments/sgmse_logs/fcj02u93-kws_exp_9/kws_sgmse_trained.ckpt`, a
+byte-identical duplicate of the epoch-176 checkpoint. `<archive>/README.md` lists the
+archive's contents and how to re-check them; `<archive>/manifests/` holds a per-file
+SHA-256 manifest for every row above.
 
-## Proposed convention for GannotLab storage
+## How the code finds the data
 
-Use one root per artifact class, so the shared location can be set once and code
-and configs stay free of personal home directories.
+No tracked code hard-codes a data path. Inputs come from the YAML config or from
+command-line arguments. The one exception is the demo's mapping table from historical
+to archive paths in `code/kws/demo/demo_utils.py`. Three local scripts ignored by Git
+still contain absolute paths: `code/kws/dataset_generation/build_reverb_dataset.py`
+(reads `<repo>/data/raw/data_new`), `code/kws/denoiser/noise_onthefly_dataset.py`
+(paths that no longer exist) and `code/sgmse/model_visualization/sgmse_visualization.py`
+(repository demo assets). None of them is used for the final results.
 
-```text
-<KWS_ROOT>/                                  # e.g. a GannotLab shared project directory (TBD)
-├── data/
-│   ├── speech_commands/                     # ← data/raw/data_new
-│   ├── noisy/                               # ← data/noisy_new
-│   │   └── metadata.csv                     # ← data/noisy_new_metadata.csv
-│   ├── enhanced/
-│   │   ├── sgmse_vbdmd_pretrained/          # ← data/enhanced_new/baseline
-│   │   ├── sgmse_kws_ep176/                 # ← data/enhanced_new/trained_ep176
-│   │   └── metadata.csv                     # ← either identical enhanced_*_metadata.csv
-│   └── sgmse_train/                         # ← data/train_sgmse
-├── checkpoints/
-│   ├── sgmse/
-│   │   ├── kws_ep176.ckpt                   # ← epoch=176-valid_loss=558.3868.ckpt (preferred source)
-│   │   └── vbdmd_pretrained_ep115.ckpt      # ← train_vb_29nqe0uh_epoch=115.ckpt
-│   └── dscnn/
-│       ├── 30class/                         # ← outputs/dscnn_full_dataset_best
-│       ├── 6class_bed-bird-dog-go-happy-house/   # ← 2026-07-07_11-36-05/models
-│       └── 6class_go-no-off-on-stop-yes/         # ← 2026-06-08_12-14-57_presentation/models
-└── outputs/                                 # new run outputs
-```
+| Use | What to use |
+|---|---|
+| Re-run a final experiment | `reproducibility/configs/archive/*.yaml`: archive-location variants of the four historical configs (see [`README.md`](README.md#historical-and-archive-location-configs)) |
+| Day-to-day training and evaluation on the lab machine | `code/kws/new_config.yaml` (local, ignored by Git). It points to the archive since 2026-11-08 |
+| Browse `interesting_examples.csv` with the Gradio demo | Historical CSVs store `<repo>/data/...` paths. `gradio_demo.py` remaps them to the archive in memory; the CSVs are not edited. Use `--path-map OLD=NEW` for another location, `--no-path-remap` to disable |
+| Another machine | Copy the archive layout and change the path values in a config copy |
 
-Principles:
+`output_dir` still points to `<repo>/outputs/new_runs`. New results are written to
+the working repository, never to the archive.
 
-1. **Names describe content, not history**: `sgmse_kws_ep176` instead of `trained_ep176`,
-   and `sgmse_vbdmd_pretrained` instead of `baseline`.
-2. **Configs would reference `<KWS_ROOT>`** (substituted per machine) instead of
-   `/home/dsi/skopavi/...`. This requires either a small loader change or
-   per-machine config copies, which is a decision for a later phase.
-3. **Verify every migrated artifact against the SHA-256 values** in
-   `CHECKPOINTS.md` and `EXPERIMENTS.md`.
-4. **Keep one copy of the epoch-176 checkpoint.** `kws_sgmse_trained.ckpt` is the
-   publication name on Hugging Face, not a separate model.
+## Verification
 
-## Open decisions (not taken)
+- **Copy (Phase 5C):** every one of the 161,989 archived files has the same SHA-256 as
+  its source. `rsync --checksum` dry runs found no differences. The 11 checkpoint and
+  classifier hashes match [`CHECKPOINTS.md`](CHECKPOINTS.md).
+- **Use (Phase 5D):** with every input read from the archive, the 30-class
+  evaluation reproduces `metrics.txt`, `reports.txt` and `misclassified_report.txt`
+  byte for byte, and both 6-class models reproduce 10,284 / 10,284 historical
+  per-file predictions. A file-access trace (`strace`) found no read of the home data. Details in
+  [`VERIFICATION.md`](VERIFICATION.md#archive-verification-phases-5c-and-5d-2026-11-08).
 
-- The GannotLab root path and its access permissions.
-- Whether to copy data or move it, and when to retire the copies under `/home/dsi/skopavi`.
-- Whether `<KWS_ROOT>` is resolved by an environment variable, a config key, or
-  rewritten configs.
-- Caution: the `.gitignore` pattern `data/` ignores **any** directory named `data`
-  at any depth. Today that only hides `code/sgmse/data/`, which holds an empty
-  Kaggle download directory, but it would silently hide any future `data/` code
-  package.
+## Remaining risks and open items
+
+- **No off-site copy.** The archive and the home originals are on the same Isilon
+  cluster, which keeps snapshots every 12 h for 7 days. `noisy_new` cannot be
+  regenerated (noise offsets were not recorded), and `enhanced_new` cannot be
+  regenerated bit-exactly (unseeded sampler). Once the home originals are deleted,
+  these exist in one place only until an off-site backup is made.
+- **Kaggle upload staging.** `/home/dsi/skopavi/kws_kaggle_upload/` (outside the
+  repository) holds 5 symlinks into `<repo>/data/`. They still point to the home
+  originals and would dangle after deletion. They have not been changed.
+- **Archive permissions** are 2750 (directories) and 640 (files), group `dsi`: the
+  owner can write, members of `dsi` can read, other users have no access.
+- The `.gitignore` pattern `data/` ignores **any** directory named `data` at any
+  depth. Today that only hides `code/sgmse/data/` (an empty Kaggle download
+  directory), but it would silently hide a future `data/` code package.

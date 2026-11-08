@@ -12,9 +12,15 @@ therefore reconstructed from evidence only, in this order of strength:
 Values that the evidence does not settle are marked in the config comments.
 None were filled in by guesswork.
 
+**Paths in this file are historical:** relative to the repository on the lab
+machine, as the experiments read them. Since 2026-11-08 the verified copy of every
+input and model is in the GannotLab archive. [`DATA_LAYOUT.md`](DATA_LAYOUT.md) maps
+each historical path to its archive path, and `configs/archive/` holds archive-location
+variants of the four configs (identical except for the path values).
+
 ## Shared inputs (all experiments)
 
-| Input | Path | Evidence |
+| Input | Historical path | Evidence |
 |---|---|---|
 | Clean speech (Google Speech Commands, Kaggle `neehakurelli/google-speech-commands`) | `data/raw/data_new` | 30 keyword folders + `_background_noise_` |
 | Noisy dataset | `data/noisy_new/{train,val,test}` | `data/noisy_new_metadata.csv`: 51776 train / 6472 val / 6473 test rows; SNR ∈ {0, 2.5, 5, 7.5, 10, 12.5} dB; SHA-256 `5432a0b07f66333c58708f6923d239ecc71acaf2a69d083617e3dcc2fd769340` |
@@ -43,7 +49,7 @@ None were filled in by guesswork.
 |---|---|
 | Training run | `outputs/new_runs/2026-05-26_18-01-43_all_folders` (HEAD then: `2b029a9`, plus any changes not committed at the time) |
 | Evaluation run with full metrics | `outputs/new_runs/2026-05-29_19-14-17_all_annot_false` (evaluation only; same model) |
-| Config | `configs/kws_30class_train.yaml`, `configs/kws_30class_eval.yaml` |
+| Config | `configs/kws_30class_train.yaml`, `configs/kws_30class_eval.yaml` (historical); archive-location variants in `configs/archive/` |
 | Saved model | `outputs/dscnn_full_dataset_best/` (byte-identical to the 05-26 run's `models/`) |
 | Classes | all 30 (`folder_start 0`, `folder_end 30`, no `selected_folders`) |
 | Test files | 6473 |
@@ -70,7 +76,7 @@ Key evidence:
 | Item | Value |
 |---|---|
 | Run | `outputs/new_runs/2026-07-07_11-36-05` (HEAD then: `38cb187`, plus changes not committed at the time) |
-| Config | `configs/kws_6class_bed-bird-dog-go-happy-house.yaml` |
+| Config | `configs/kws_6class_bed-bird-dog-go-happy-house.yaml` (historical); archive-location variant in `configs/archive/` |
 | Model | `outputs/new_runs/2026-07-07_11-36-05/models/` |
 | Test files | 1124 (= 183 + 180 + 165 + 245 + 173 + 178, the six test folders) |
 | Class-list evidence | `reports.txt`; also the committed config of 2026-08-09 and the current local `new_config.yaml` |
@@ -87,7 +93,7 @@ Key evidence:
 | Item | Value |
 |---|---|
 | Run | `outputs/new_runs/2026-06-08_12-14-57_presentation` (HEAD then: `1c3a5ae`, plus changes not committed at the time) |
-| Config | `configs/kws_6class_go-no-off-on-stop-yes.yaml` |
+| Config | `configs/kws_6class_go-no-off-on-stop-yes.yaml` (historical); archive-location variant in `configs/archive/` |
 | Model | `outputs/new_runs/2026-06-08_12-14-57_presentation/models/` |
 | Test files | 1447 (equals the sum of the six test folders) |
 | Class-list evidence | `reports.txt` only (no committed config has this list) |

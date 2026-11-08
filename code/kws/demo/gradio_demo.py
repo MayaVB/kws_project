@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import gradio as gr
 
+from demo_utils import DEFAULT_PATH_MAP, parse_path_map, remap_audio_paths, AUDIO_PATH_COLUMNS
+
 
 # =====================================================
 # ARGUMENTS
@@ -12,6 +14,11 @@ import gradio as gr
 def parse_args():
     parser = argparse.ArgumentParser(description="Browse and select interesting KWS examples.")
     parser.add_argument("--csv", type=str, required=True, help="Path to an interesting_examples.csv file.",)
+    parser.add_argument("--path-map", action="append", default=[], metavar="OLD=NEW",
+                        help="Extra audio path prefix mapping (repeatable). Takes precedence over the built-in "
+                             "historical-data -> GannotLab-archive mapping.")
+    parser.add_argument("--no-path-remap", action="store_true",
+                        help="Use the audio paths exactly as stored in the CSV.")
 
     return parser.parse_args()
 
@@ -26,6 +33,16 @@ SAVE_PATH = Path(__file__).resolve().parent / "selected_examples.csv"
 # =====================================================
 
 df = pd.read_csv(CSV_PATH)
+
+# Historical CSVs hold absolute paths to the original data location; remap them
+# in memory to the archive (the CSV file itself is not modified).
+if not args.no_path_remap:
+    df = remap_audio_paths(df, parse_path_map(args.path_map) + DEFAULT_PATH_MAP)
+
+_missing = sum(not (isinstance(p, str) and os.path.exists(p))
+               for col in AUDIO_PATH_COLUMNS if col in df.columns for p in df[col])
+if _missing:
+    print(f"WARNING: {_missing} audio paths in {CSV_PATH} do not exist (use --path-map OLD=NEW).")
 
 df = (
     df[df["category"] == "fixed"]

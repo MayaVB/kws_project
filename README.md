@@ -71,7 +71,7 @@ kws_project/
 └── README.md
 ```
 
-Datasets, checkpoints, experiment outputs, logs, and machine-specific configuration files are not tracked by Git.
+Datasets, checkpoints, experiment outputs, logs, and machine-specific configuration files are not tracked by Git. On the lab machine, the verified copy of every dataset and model used for the final results is in the GannotLab archive (`/dsi/gannot-lab/gannot-lab1/datasets/skopavi/kws_archive`); see [`reproducibility/DATA_LAYOUT.md`](reproducibility/DATA_LAYOUT.md).
 
 ---
 
@@ -224,7 +224,7 @@ A pretrained SGMSE+ model trained on VoiceBank-DEMAND is used as the baseline en
 
 SGMSE can be trained on the paired clean/noisy Google Speech Commands data generated for this project.
 
-**Settings of the released checkpoint (historical).** The project checkpoint (`kws_sgmse_trained.ckpt`, epoch 176) was trained with **batch size 1, gradient accumulation 4 (effective batch 4), Adam learning rate 1e-4 and weight decay 0**. These values were recovered from the checkpoint's stored hyperparameters, optimizer state and loop counters; see [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md). To retrain with the same settings:
+**Settings of the project checkpoint (historical).** The project checkpoint (epoch 176, `epoch=176-valid_loss=558.3868.ckpt`) was trained with **batch size 1, gradient accumulation 4 (effective batch 4), Adam learning rate 1e-4 and weight decay 0**. These values were recovered from the checkpoint's stored hyperparameters, optimizer state and loop counters; see [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md). To retrain with the same settings:
 
 ```bash
 python code/sgmse/train.py \
@@ -241,9 +241,9 @@ python code/sgmse/train.py \
     --wandb_name kws_experiment
 ```
 
-`--max_epochs 200` is not recorded in the checkpoint. The released checkpoint is from epoch 176, selected by validation loss.
+`--max_epochs 200` is not recorded in the checkpoint. The project checkpoint is from epoch 176, selected by validation loss.
 
-An earlier version of this README gave `--batch_size 2 --accumulate_grad_batches 2`. That has the same effective batch size of 4, but it is not the configuration that produced the released checkpoint, and it is not guaranteed to give numerically equivalent training.
+An earlier version of this README gave `--batch_size 2 --accumulate_grad_batches 2`. That has the same effective batch size of 4, but it is not the configuration that produced the project checkpoint, and it is not guaranteed to give numerically equivalent training.
 
 SGMSE training is not seeded, so retraining gives a statistically comparable model, not an identical one.
 
@@ -301,17 +301,19 @@ See the [official SGMSE repository](https://github.com/sp-uhh/sgmse) for the ori
 
 ### Project-Trained SGMSE
 
-The selected SGMSE checkpoint obtained using the project data is available on Hugging Face:
+An SGMSE checkpoint trained on the project data is published on Hugging Face (see the verification note below):
 
 **[Download `kws_sgmse_trained.ckpt`](https://huggingface.co/avitalskop/kws-sgmse/blob/main/kws_sgmse_trained.ckpt)**
 
 The checkpoint is not stored directly in this Git repository due to its size.
 
-`kws_sgmse_trained.ckpt` is the epoch-176 checkpoint of the project SGMSE training run (`epoch=176-valid_loss=558.3868.ckpt`); the two local files are byte-identical. It was used for every "project-trained SGMSE" result. Expected SHA-256:
+Every "project-trained SGMSE" result used the epoch-176 checkpoint of the project SGMSE training run, `epoch=176-valid_loss=558.3868.ckpt`. This is the full original training checkpoint (1,312,973,992 bytes, including optimizer and training state). Its verified copy is in the GannotLab archive, and its SHA-256 is:
 
 ```text
 90e19444b5e6c7d9a07cc49543804a02f57717d8d971e45832ee531b447f7af5
 ```
+
+**The Hugging Face file has not been verified against this checkpoint.** Hugging Face reports its size as 594,804,736 bytes, so the hash above does not apply to it, and whether it holds the same weights is unresolved until the public file is downloaded and compared. See [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md).
 
 Enhanced datasets were generated with the default sampler settings of `enhancement.py` (PC sampler, reverse-diffusion predictor, ALD corrector, 1 corrector step, `snr 0.5`, `N 30`). See [`reproducibility/CHECKPOINTS.md`](reproducibility/CHECKPOINTS.md) for all checkpoint hashes and metadata.
 
@@ -384,7 +386,7 @@ The final results include a 30-class experiment and two 6-class experiments. The
 | `kws_6class_bed-bird-dog-go-happy-house.yaml` | 6 classes (A) | `2026-07-07_11-36-05` |
 | `kws_6class_go-no-off-on-stop-yes.yaml` | 6 classes (B) | `2026-06-08_12-14-57_presentation` |
 
-These files contain the original absolute paths of the lab machine; adjust them for your setup. The evidence for each value, the results, and the limits on exact reproduction (KWS training is not seeded; SGMSE sampling is stochastic) are documented in [`reproducibility/EXPERIMENTS.md`](reproducibility/EXPERIMENTS.md).
+These files record the original absolute paths on the lab machine and are kept unedited. [`reproducibility/configs/archive/`](reproducibility/configs/archive/) holds the same four configs with data and model paths pointing to the verified GannotLab archive; nothing else differs. Use those on the lab machine, and adjust the paths for any other setup. The evidence for each value, the results, and the limits on exact reproduction (KWS training is not seeded; SGMSE sampling is stochastic) are documented in [`reproducibility/EXPERIMENTS.md`](reproducibility/EXPERIMENTS.md).
 
 ### Train and Evaluate
 
@@ -403,8 +405,10 @@ To evaluate a saved DS-CNN model (model, scaler and label encoder given by `best
 
 ```bash
 python code/kws/src/run_evaluation_main.py \
-    --config reproducibility/configs/kws_30class_eval.yaml
+    --config reproducibility/configs/archive/kws_30class_eval.yaml
 ```
+
+(The historical `reproducibility/configs/kws_30class_eval.yaml` reads the same data from its original location.)
 
 If `--config` is omitted, `code/kws/new_config.yaml` is used, as before. This script always evaluates every class in the metadata; `folder_start`, `folder_end` and `selected_folders` are ignored. (The "usage limitation" comment inside `kws_30class_eval.yaml` predates the `--config` option and no longer applies; the historical config files are intentionally left unedited.)
 
@@ -474,6 +478,8 @@ Interesting examples can also be explored locally using:
 python code/kws/demo/gradio_demo.py \
     --csv path/to/interesting_examples.csv
 ```
+
+`interesting_examples.csv` files from earlier runs store absolute audio paths under the original data directory. The demo remaps them in memory to the GannotLab archive, and the CSV files are not modified. Add `--path-map OLD_PREFIX=NEW_PREFIX` (repeatable) for another data location, or `--no-path-remap` to use the stored paths unchanged.
 
 ---
 
