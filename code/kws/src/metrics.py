@@ -281,16 +281,14 @@ def run_calc_metrics(df_test_audio, sampling_rate, run_dir, noisy_root, enhanced
         "--enhanced_dir", enhanced_tmp_dir,
     ]
 
+    metrics_start = time.time()
+
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
         check=True,
     )
-
-    metrics_start = time.time()
-
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     metrics_time = time.time() - metrics_start
 
