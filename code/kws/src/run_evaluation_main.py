@@ -42,7 +42,7 @@ from features import add_mfcc_column, apply_scaler
 from train import get_device, load_model, evaluate_loader
 from metrics import confusion_and_report, pick_random_class_pair
 from visualization import plot_example_signals, plot_confusion_comparison
-from analysis_utils import analyze_mode, save_metrics_summary
+from analysis_utils import analyze_mode, save_prediction_reports, save_metrics_summary
 from new_noise_dataset import FixedNoisyDataset
 from enhanced_dataset import EnhancedTestDataset
 
@@ -288,7 +288,20 @@ def run(cfg: dict):
             device=device,
             return_meta=True
         )
-        
+
+        # SAVE PER-FILE PREDICTIONS (same as run_training.py);
+        # plot_example_signals() reads <run_dir>/noisy_all_predictions.csv
+        save_prediction_reports(
+            t=t,
+            p=p,
+            f=f,
+            mode_name=mode_name,
+            label_encoder=label_encoder,
+            run_dir=run_dir,
+            snr=snr,
+            noise=noise
+        )
+
         eval_time = time.time() - eval_start
         print(
             f"\nEVALUATION TIME ({mode_name}): "
@@ -338,6 +351,7 @@ def run(cfg: dict):
             b=b,
             df_test_audio=df_test_audio,
             sampling_rate=sampling_rate,
+            noisy_root=os.path.join(noisy_root, "test"),
             enhanced_root=(
                 mode_cfg["root"]
                 if mode_type == "enhanced"

@@ -406,6 +406,18 @@ python code/kws/src/run_evaluation_main.py \
 
 If `--config` is omitted, `code/kws/new_config.yaml` is used, as before. This script always evaluates every class in the metadata; `folder_start`, `folder_end` and `selected_folders` are ignored. (The "usage limitation" comment inside `kws_30class_eval.yaml` predates the `--config` option and no longer applies; the historical config files are intentionally left unedited.)
 
+`output_dir` in the config sets where results go. Each run creates a timestamped directory there containing:
+
+- `<mode>_all_predictions.csv` and `<mode>_misclassified.csv` for `clean`, `noisy`, `enh_baseline` and `enh_trained` (the same format as training runs)
+- `reports.txt`, `misclassified_report.txt`, `metrics.txt` (PESQ, ESTOI, SI-SDR, SI-SIR, SI-SAR of both enhanced sets) and `metrics_comparison.txt`
+- `plots/` (confusion matrices, per-SNR and per-noise analysis, an example signal/MFCC comparison)
+
+The enhancement metrics are computed by running `code/sgmse/calc_metrics.py` with the same Python interpreter. It works on temporary copies under `/tmp/kws_metrics_<mode>_<pid>_<time>/` (about 0.6 GB per enhanced mode for the full test set). These copies are not deleted automatically.
+
+**Verified (2026-11-08):** on CPU (8 threads), `kws_30class_eval.yaml` with `output_dir` redirected takes about 20 minutes. It reproduces the historical 30-class results: accuracies 0.9303 / 0.6484 / 0.7890 / 0.8248 (clean / noisy / baseline / trained), with `metrics.txt`, `reports.txt` and `misclassified_report.txt` byte-identical to the original run. `metrics_comparison.txt` now shows accuracy with 2 decimals instead of 4, a formatting change made after the experiments.
+
+To evaluate without overwriting anything, copy the config and change `output_dir` first. On a shared machine, consider setting `use_parallel: false`, because otherwise audio loading and MFCC extraction use one thread per CPU core.
+
 ### Tests
 
 CPU-only tests for the entry points (standard-library `unittest`; no GPU or data needed):
