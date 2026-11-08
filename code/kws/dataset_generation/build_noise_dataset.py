@@ -36,6 +36,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    random.seed(42)
 
     clean_root = args.clean_root
     output_root = args.output_root
@@ -71,7 +72,7 @@ def main():
     for label in folders:
         in_dir = os.path.join(clean_root, label)
 
-        files = [ f for f in os.listdir(in_dir) if f.endswith(".wav")]
+        files = sorted(f for f in os.listdir(in_dir) if f.endswith(".wav"))
 
         for fname in files:
             all_files.append((label, fname))
