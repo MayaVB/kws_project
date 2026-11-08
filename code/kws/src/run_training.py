@@ -71,7 +71,9 @@ def run(cfg: dict):
 
     meta_path = str(cfg["meta"])  
     noisy_root = str(cfg["noisy_dir"])
-    enh_new_dir = str(cfg["enh_new_dir"])
+    # Optional and currently unused: only the disabled automatic-discovery block
+    # below refers to it. Keep str() when present; None when absent.
+    enh_new_dir = str(cfg["enh_new_dir"]) if "enh_new_dir" in cfg else None
     enh_trained = str(cfg["enh_trained"])
     enh_baseline = str(cfg["enh_baseline"])
 
