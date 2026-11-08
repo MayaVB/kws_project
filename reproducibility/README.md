@@ -18,6 +18,7 @@ directly or marked as unverified.
 | [`configs/archive/`](configs/archive/) | The same four configs with data and model paths pointing to the GannotLab archive |
 | [`EXPERIMENTS.md`](EXPERIMENTS.md) | The final experiments, the evidence behind each config, results, limits on exact reproduction |
 | [`CHECKPOINTS.md`](CHECKPOINTS.md) | SGMSE and DS-CNN checkpoint identities (SHA-256, metadata, inference settings) |
+| [`ARCHIVE_CLOSURE.md`](ARCHIVE_CLOSURE.md) | Final state after archiving: canonical location, verification, reproduction commands, backup status, cleanup plan |
 | [`DATA_LAYOUT.md`](DATA_LAYOUT.md) | Historical data locations, their GannotLab archive equivalents, how the code finds the data, remaining risks |
 
 ## Verifying an environment

@@ -74,8 +74,9 @@ the working repository, never to the archive.
   regenerated bit-exactly (unseeded sampler). Once the home originals are deleted,
   these exist in one place only until an off-site backup is made.
 - **Kaggle upload staging.** `/home/dsi/skopavi/kws_kaggle_upload/` (outside the
-  repository) holds 5 symlinks into `<repo>/data/`. They still point to the home
-  originals and would dangle after deletion. They have not been changed.
+  repository) holds 5 symlinks. Since 2026-11-08 they point to the archive (`noisy`,
+  `enhanced` and 3 metadata CSVs; previous targets recorded in
+  `~/kws_kaggle_upload.links.before.tsv`). See [`ARCHIVE_CLOSURE.md`](ARCHIVE_CLOSURE.md).
 - **Archive permissions** are 2750 (directories) and 640 (files), group `dsi`: the
   owner can write, members of `dsi` can read, other users have no access.
 - The `.gitignore` pattern `data/` ignores **any** directory named `data` at any
