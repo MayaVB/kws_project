@@ -74,11 +74,31 @@ def remap_audio_paths(df, path_map=DEFAULT_PATH_MAP, columns=AUDIO_PATH_COLUMNS)
     return out
 
 
+def build_audio_paths(filename, label, clean_root, noisy_root, enhanced_root):
+    """
+    Return the (clean, noisy, enhanced) audio paths of one test file.
+
+    All three datasets use the layout <root>/<label>/<filename>. `noisy_root`
+    is the noisy *test* directory (<noisy_dir>/test). Before commit c655087 the
+    three roots were hard-coded to the lab home directory; they now come from
+    the run configuration.
+    """
+    return (
+        os.path.join(clean_root, label, filename),
+        os.path.join(noisy_root, label, filename),
+        os.path.join(enhanced_root, label, filename),
+    )
+
+
 def compare_prediction_modes(
     clean_csv,
     noisy_csv,
     enh_csv,
-    output_dir
+    output_dir,
+    *,
+    clean_root,
+    noisy_root,
+    enhanced_root
 ):
     """
     demo_utils.py
@@ -240,7 +260,10 @@ def compare_prediction_modes(
 
         c, n, e = build_audio_paths(
             row["filename"],
-            row["true_label"]
+            row["true_label"],
+            clean_root,
+            noisy_root,
+            enhanced_root
         )
 
         clean_paths.append(c)

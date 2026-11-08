@@ -386,7 +386,12 @@ def run(cfg: dict):
         enh_csv=run_dir /
         "enh_trained_all_predictions.csv",
 
-        output_dir=run_dir
+        output_dir=run_dir,
+
+        # audio paths written to interesting_examples.csv
+        clean_root=clean_root,
+        noisy_root=os.path.join(noisy_root, "test"),
+        enhanced_root=enh_trained
     )
 
     enhanced_versions = {}
