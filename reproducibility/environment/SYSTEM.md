@@ -10,6 +10,7 @@ directly; nothing is inferred.
 |---|---|---|
 | `sgmse_env.pip-freeze.2026-11-08.txt` | `code/sgmse/sgmse_env/bin/python -m pip freeze` (141 packages) | `a7b6e31cec3a7a3a4c0bd70dab9c137dceaf3feabac2486ac67bc49124bcfd81` |
 | `demo_env.pip-freeze.2026-11-08.txt` | `demo_env/bin/python -m pip freeze` (78 packages) | `343b5fb01539caee21e3cac4ee3d674ac317358730275ea39e392b6655184304` |
+| `kws-main-py39.pip-freeze.2026-11-08.txt` | `/home/dsi/skopavi/envs/kws-main-py39/bin/python -m pip freeze` (103 packages), the verified clean rebuild of the main environment | `0c2d98404bc25355b62980f1d325cdf71e980039b7cf35543c94d4c2260c8676` |
 
 These files are unedited `pip freeze` output. Do not change them; record a new
 dated snapshot instead.
@@ -44,6 +45,20 @@ Import check on 2026-11-08 (CPU only, `python -I`, no GPU): every KWS module
 `analysis_utils`, which fails with `ModuleNotFoundError: tabulate`**. Both KWS
 entry points (`run_training.py`, `run_evaluation_main.py`) import
 `analysis_utils`, so this environment cannot run them unless `tabulate` is added.
+
+### Verified clean rebuild: `/home/dsi/skopavi/envs/kws-main-py39` (2026-11-08)
+
+| Item | Value |
+|---|---|
+| Type | `venv` from `/usr/bin/python3.9` (3.9.25), outside the repository |
+| Installed from | `requirements/requirements-main.txt`, constrained by `sgmse_env.pip-freeze.2026-11-08.txt`, with `pip==26.0.1` and `--no-cache-dir` |
+| Packages | 103: the 102 shared with `sgmse_env` at identical versions, plus `tabulate 0.9.0`; 39 unused packages omitted |
+| PyTorch | 2.8.0+cu128 (same wheels as `sgmse_env`) |
+| Size on disk | 7.0 GiB of files (11 GB allocated on the NFS home filesystem) |
+
+All tests pass in this environment, and it reproduces the historical DS-CNN
+predictions and the 30-class evaluation results. See
+[`../VERIFICATION.md`](../VERIFICATION.md). `sgmse_env` has not been removed.
 
 ### Demo environment: `demo_env` (optional)
 

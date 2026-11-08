@@ -99,6 +99,8 @@ python -m pip install -r reproducibility/requirements/requirements-main.txt
 
 `requirements-main.txt` pins the versions observed in the original environment and adds `tabulate`, which the KWS reporting code requires but which was missing from that environment. To rebuild the original environment exactly instead, install from `reproducibility/environment/sgmse_env.pip-freeze.2026-11-08.txt` (and then add `tabulate==0.9.0`).
 
+Adding `-c reproducibility/environment/sgmse_env.pip-freeze.2026-11-08.txt` to the install command also pins every indirect dependency to the original versions. An environment built this way on 2026-11-08 reproduced the historical DS-CNN predictions and the 30-class evaluation results exactly on CPU. Its package list is `reproducibility/environment/kws-main-py39.pip-freeze.2026-11-08.txt`, and the full results and remaining limitations are in [`reproducibility/VERIFICATION.md`](reproducibility/VERIFICATION.md).
+
 On Linux x86_64, `torch==2.8.0` from PyPI is the CUDA 12.8 build. The NVIDIA driver must support CUDA 12.8. The system CUDA toolkit is not used.
 
 ### Demo Environment (optional)

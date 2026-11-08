@@ -10,6 +10,8 @@ directly or marked as unverified.
 | [`environment/SYSTEM.md`](environment/SYSTEM.md) | OS, GPU, driver, CUDA, Python, PyTorch, environment provenance, source revisions |
 | [`environment/sgmse_env.pip-freeze.2026-11-08.txt`](environment/sgmse_env.pip-freeze.2026-11-08.txt) | Raw, unedited `pip freeze` of the main environment |
 | [`environment/demo_env.pip-freeze.2026-11-08.txt`](environment/demo_env.pip-freeze.2026-11-08.txt) | Raw, unedited `pip freeze` of the demo environment |
+| [`environment/kws-main-py39.pip-freeze.2026-11-08.txt`](environment/kws-main-py39.pip-freeze.2026-11-08.txt) | Raw, unedited `pip freeze` of the verified clean rebuild of the main environment |
+| [`VERIFICATION.md`](VERIFICATION.md) | Clean-environment test results: exact reproduction of DS-CNN predictions and 30-class evaluation results, SGMSE CPU checks, what remains unverified |
 | [`requirements/requirements-main.txt`](requirements/requirements-main.txt) | Pinned direct dependencies for KWS + SGMSE (observed versions, plus `tabulate` as a proposed addition) |
 | [`requirements/requirements-demo.txt`](requirements/requirements-demo.txt) | Pinned dependencies for the optional Gradio demo |
 | [`configs/`](configs/) | Reconstructed configs for the 30-class and both 6-class experiments, with per-key provenance |
